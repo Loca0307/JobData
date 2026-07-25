@@ -1,69 +1,152 @@
 # JobData
 
-Private, data-first collection and analysis infrastructure for Swiss job-market
-data.
+Private, data-first ingestion for Swiss job-market experiments. The repository
+contains three unfiltered source adapters, an idempotent DynamoDB pipeline,
+FastAPI operational endpoints, and a basic Next.js count dashboard.
 
-## Current scope
+## Source status
 
-The backend currently provides unfiltered source adapters for:
+Adapters exist for:
 
 - `jobs.ch`
 - `jobup.ch`
 - `swissdevjobs.ch`
 
-Each adapter emits a `SourceRecord` containing both a normalized job and the
-original source payload. The adapters do not write to DynamoDB directly.
-Persistence, scrape-run workers, and API endpoints will be added as separate
-pipeline stages.
+The two JobCloud adapters enumerate unfiltered listing pages until an empty or
+repeated page. SwissDevJobs reads the RSS surface once. No title, location,
+skill, or profile filters are applied.
 
-`jobs.ch` and `jobup.ch` are collected page by page from their public,
-unfiltered English listing pages until the source returns an empty page or
-repeats a page. SwissDevJobs is collected once from its public RSS feed. No
-title, location, skill, or user-profile filtering is applied.
+All live adapters are disabled by default. Current JobCloud and SwissDevJobs
+terms prohibit automated access or collection without authorization. After
+obtaining explicit permission from a publisher, enable only that source with
+its authorization variable. Fixture-driven tests work without live access.
 
-## Backend setup
+## DynamoDB table
 
-Python 3.12 and [`uv`](https://docs.astral.sh/uv/) are expected.
+Create the table yourself with:
+
+- partition key: `PK` (String)
+- sort key: `SK` (String)
+- billing/capacity mode: your choice
+- no secondary index required for the current endpoints
+
+The application never creates or mutates table configuration. Its AWS identity
+needs `dynamodb:DescribeTable`, `dynamodb:GetItem`,
+`dynamodb:BatchGetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, and
+`dynamodb:TransactWriteItems` on this table.
+
+Required environment:
+
+```bash
+export AWS_REGION="eu-central-1"
+export DYNAMODB_TABLE_NAME="JobData"
+```
+
+Optional DynamoDB Local endpoint:
+
+```bash
+export DYNAMODB_ENDPOINT_URL="http://localhost:8000"
+```
+
+The normal AWS credential provider chain is used. Never put AWS credentials in
+this repository or in the frontend.
+
+## Backend
+
+Python 3.12 is required. Install with either pip:
+
+```bash
+cd backend
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+or `uv`:
 
 ```bash
 cd backend
 uv sync
 ```
 
-Set a truthful contact value before live collection:
-
-```bash
-export SCRAPER_CONTACT="mailto:owner@example.com"
-```
-
-The user agent, timeouts, retry policy, rate limit, and pagination safety bound
-can be configured:
+Configure the collector:
 
 | Variable | Default | Purpose |
-| --- | ---: | --- |
-| `SCRAPER_USER_AGENT` | `JobDataBot/0.1 ...` | Identifies the collector |
-| `SCRAPER_CONTACT` | unset | Appended contact information |
-| `SCRAPER_CONNECT_TIMEOUT_SECONDS` | `5` | Connection timeout |
-| `SCRAPER_READ_TIMEOUT_SECONDS` | `20` | Response-read timeout |
-| `SCRAPER_MAX_RETRIES` | `3` | Retry count for transient failures |
+| --- | --- | --- |
+| `SCRAPER_ENABLED_SOURCES` | all three names | Comma-separated source selection |
+| `JOBS_CH_SCRAPING_AUTHORIZED` | `false` | Assert jobs.ch collection permission |
+| `JOBUP_CH_SCRAPING_AUTHORIZED` | `false` | Assert jobup.ch collection permission |
+| `SWISSDEVJOBS_CH_SCRAPING_AUTHORIZED` | `false` | Assert SwissDevJobs collection permission |
+| `SCRAPER_CONTACT` | unset | Truthful operator contact appended to user agent |
+| `SCRAPER_REQUESTS_PER_SECOND` | `1` | Process-local request rate |
+| `SCRAPER_MAX_RETRIES` | `3` | Transient retry count |
 | `SCRAPER_RETRY_BACKOFF_SECONDS` | `1` | Exponential-backoff base |
-| `SCRAPER_REQUESTS_PER_SECOND` | `1` | Process-local source request rate |
-| `SCRAPER_MAX_PAGES` | `2000` | Fails a run that does not exhaust first |
+| `SCRAPER_CONNECT_TIMEOUT_SECONDS` | `5` | Connection timeout |
+| `SCRAPER_READ_TIMEOUT_SECONDS` | `20` | Read timeout |
+| `SCRAPER_MAX_PAGES` | `2000` | Fail-loud pagination circuit breaker |
+| `SCRAPER_SOURCE_MAX_WORKERS` | `3` | Parallel source workers |
+| `API_CORS_ORIGINS` | `http://localhost:3000` | Allowed dashboard origins |
 
-Run the offline tests and lint checks:
+Run one complete authorized ingestion:
 
 ```bash
-uv run pytest
-uv run ruff check .
+cd backend
+.venv/bin/python -m app.workers.scrape_all
 ```
 
-Ordinary tests use only sanitized fixtures and never contact a job board.
+Start the API:
 
-## Important collection limits
+```bash
+cd backend
+.venv/bin/uvicorn app.api.main:app --reload
+```
 
-"All jobs" means all records exposed through the implemented public listing
-surface during a successful run. It does not imply access to hidden,
-authenticated, personalized, expired, or otherwise restricted listings.
-Source terms and robots directives must be reviewed before operating the
-collector at scale. If a source changes its schema, the adapter raises an error
-instead of treating the change as an empty result.
+Endpoints:
+
+- `GET /api/v1/health`
+- `GET /api/v1/readiness`
+- `GET /api/v1/stats/jobs`
+
+Run backend checks:
+
+```bash
+cd backend
+.venv/bin/python -m pytest
+.venv/bin/python -m ruff check .
+```
+
+Ordinary tests use sanitized fixtures and fakes. They never contact live job
+sites or the owner’s AWS account.
+
+## Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open `http://localhost:3000`. Set `NEXT_PUBLIC_API_BASE_URL` if FastAPI is not
+running at `http://localhost:8000`.
+
+Production checks:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+The dashboard reads only aggregate counts and the latest run through FastAPI.
+It never connects to DynamoDB directly.
+
+## Collection semantics
+
+“All jobs” means all distinct source IDs exposed by an authorized, implemented
+listing surface during a successful run. It does not include authenticated,
+hidden, personalized, expired, or otherwise restricted records.
+
+Re-running ingestion updates `last_seen_at`, provenance, content hash, and raw
+payload for an existing source ID. It does not create another occurrence.
+Missing listings are not marked inactive after one run; a source-aware
+multi-run inactivity policy has not been implemented yet.

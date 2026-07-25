@@ -96,10 +96,11 @@ conditions under which the decision should be revisited.
 
 ## 5. Public Structured Surfaces with Fail-Loud Parsing
 
-- **Choice:** Reuse the public JobCloud page state used by the existing
-  JobFinder implementation and the public SwissDevJobs RSS feed. Do not use
-  browser automation, private APIs, login state, or controls-bypassing
-  techniques.
+- **Choice:** Implement parsers for the public JobCloud page state used by the
+  existing JobFinder implementation and the SwissDevJobs RSS surface, but keep
+  every live adapter disabled until the operator has explicit publisher
+  authorization. Do not use browser automation, private APIs, login state, or
+  controls-bypassing techniques.
 - **Why:** These surfaces are simpler, lower-load, and easier to test than
   browser-driven scraping. Strict shape validation prevents a source redesign
   from being recorded as zero available jobs.
@@ -113,10 +114,82 @@ conditions under which the decision should be revisited.
     disallowed by current robots directives and are more likely to change.
   - Detail-page crawling would enrich descriptions, but multiplies request
     volume and should be a separate, source-compliance-reviewed stage.
-- **Constraints and risks:** Public availability is not permanent permission.
-  Operators must review current terms and robots directives before scaled
-  runs. The adapters stop on access errors and do not evade rate limits or
-  anti-bot measures.
+- **Constraints and risks:** As reviewed on 2026-07-24, JobCloud terms prohibit
+  crawlers, scrapers, data-mining tools, and automated access, while
+  SwissDevJobs terms prohibit automated website access and third-party
+  collection without explicit agreement. Personal or non-commercial use does
+  not itself provide that agreement. `backend/app/scrapers/registry.py` and
+  `backend/app/core/settings.py` therefore require a separate authorization
+  flag for each source. The adapters stop on access errors and never evade rate
+  limits or anti-bot measures.
 - **Revisit when:** A board offers an official API or feed, removes public
-  access, changes its terms/robots policy, or the listing payload schema
-  changes.
+  access, grants the owner written collection permission, changes its
+  terms/robots policy, or the listing payload schema changes.
+
+## 6. Source-Occurrence Identity and Single-Table Persistence
+
+- **Choice:** Use a deterministic hash of source name and source job ID as the
+  current internal job ID, and store one lossless source occurrence per item in
+  an owner-provisioned DynamoDB table with string `PK` and `SK` keys.
+- **Why:** The current phase has reliable source identities but no calibrated
+  cross-source deduplication rules. Source-scoped identity makes ingestion
+  idempotent without guessing that similar ads are the same vacancy.
+- **Relevant files:** `backend/app/db/repositories.py`,
+  `backend/app/models/jobs.py`, `backend/tests/test_repository.py`, and
+  `backend/tests/test_ingestion.py`
+- **Other possibilities:**
+  - A random UUID would work, but needs an additional lookup before every
+    update and makes replay less deterministic.
+  - Title/company/location fingerprints can combine boards immediately, but
+    risk destructive false merges.
+  - One table per entity simplifies item shapes, but adds configuration and
+    makes atomic cross-entity updates harder.
+- **Constraints and risks:** A source that reuses an ID for a genuinely new
+  vacancy would update the old occurrence. Raw payloads, content hashes, and
+  run history retain evidence for detection. Cross-source canonical IDs can be
+  introduced later without changing scraper contracts.
+- **Revisit when:** Deduplication evidence and merge/unmerge rules are defined,
+  or a source demonstrates unstable/reused identifiers.
+
+## 7. Transactional Materialized Counters Instead of Scans
+
+- **Choice:** Increment total and per-source counter items transactionally when
+  a new occurrence is inserted, and store a latest-run summary item.
+- **Why:** The dashboard needs a few exact totals. Materialized counters make
+  that request constant-size and avoid expensive full-table scans.
+- **Relevant files:** `backend/app/db/repositories.py`,
+  `backend/app/api/routes.py`, `frontend/lib/api.ts`, and
+  `backend/tests/test_repository.py`
+- **Other possibilities:**
+  - DynamoDB scans with `Select=COUNT` need no counter writes, but get slower
+    and more expensive with dataset size and violate production access rules.
+  - A GSI query still reads every matching key and requires extra table
+    configuration.
+  - Periodic analytics jobs can produce richer aggregates, but add a scheduler
+    and delay for a dashboard that currently needs only counts.
+- **Constraints and risks:** Counters are source-occurrence counts, not
+  cross-source vacancy counts. Deletion and merge workflows must update them
+  transactionally when those workflows are added.
+- **Revisit when:** The dashboard needs historical series, grouped analytics,
+  or independently repairable counters at much larger scale.
+
+## 8. Read-Only Next.js Dashboard Through FastAPI
+
+- **Choice:** Put all DynamoDB access behind FastAPI and let a small Next.js
+  client fetch only the aggregate endpoint.
+- **Why:** It keeps AWS credentials out of the browser and maintains the
+  repository/service boundaries required by this data platform.
+- **Relevant files:** `backend/app/api/`, `frontend/app/`,
+  `frontend/components/job-overview.tsx`, and `frontend/lib/api.ts`
+- **Other possibilities:**
+  - Direct browser access to DynamoDB removes one service hop, but exposes AWS
+    authorization concerns and couples UI code to table keys.
+  - Server-rendering the counts is possible, but makes the frontend build and
+    runtime more dependent on backend network availability.
+  - A charting library could add visuals, but three scalar counts do not
+    justify another dependency.
+- **Constraints and risks:** The dashboard is a private operational shell and
+  has no authentication yet. It should only be exposed inside an appropriately
+  controlled environment.
+- **Revisit when:** Authentication, historical trends, or additional private
+  analysis workflows are specified.

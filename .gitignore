@@ -1,8 +1,33 @@
 .DS_Store
 .env
+.env.local
+.env.*.local
 .pytest_cache/
 .ruff_cache/
 .venv/
 .venv*/
 __pycache__/
 *.py[cod]
+
+# Node / Next.js generated dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.turbo/
+.vercel/
+.pnpm-store/
+
+# JavaScript package-manager and framework logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local editor and operating-system files
+.idea/
+.vscode/
+*.swp

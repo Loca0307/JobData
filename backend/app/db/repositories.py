@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC
 from decimal import Decimal
 from typing import Any, Protocol
 
@@ -132,18 +132,24 @@ class DynamoIngestionRepository:
         except ClientError as exc:
             if not _is_transaction_condition_failure(exc):
                 raise
-            self._client.update_item(
-                TableName=self._table_name,
-                Key=_serialize_item(key),
-                UpdateExpression=(
-                    "SET last_seen_at = :last_seen_at, "
-                    "last_run_id = :last_run_id, "
-                    "content_hash = :content_hash, "
-                    "normalized_job = :normalized, "
-                    "raw_payload = :raw_payload"
-                ),
-                ExpressionAttributeValues=values,
-            )
+            try:
+                self._client.update_item(
+                    TableName=self._table_name,
+                    Key=_serialize_item(key),
+                    ConditionExpression="attribute_exists(PK)",
+                    UpdateExpression=(
+                        "SET last_seen_at = :last_seen_at, "
+                        "last_run_id = :last_run_id, "
+                        "content_hash = :content_hash, "
+                        "normalized_job = :normalized, "
+                        "raw_payload = :raw_payload"
+                    ),
+                    ExpressionAttributeValues=values,
+                )
+            except ClientError as update_exc:
+                if _is_conditional_failure(update_exc):
+                    raise exc from update_exc
+                raise
             return False
 
     def finish_run(self, run: ScrapeRun) -> None:

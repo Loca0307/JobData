@@ -44,9 +44,31 @@ export function JobOverview() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadCounts(controller.signal);
+    void fetchJobCounts(controller.signal)
+      .then((result) => {
+        setCounts(result);
+        setError(null);
+      })
+      .catch((loadError: unknown) => {
+        if (
+          loadError instanceof DOMException &&
+          loadError.name === "AbortError"
+        ) {
+          return;
+        }
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "The stored-job totals could not be loaded.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      });
     return () => controller.abort();
-  }, [loadCounts]);
+  }, []);
 
   return (
     <main>
