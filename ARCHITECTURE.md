@@ -7,6 +7,7 @@
 - HTTPX, Beautiful Soup, and Python XML ElementTree
 - pytest, respx, and Ruff
 - Next.js 16, React 19, TypeScript, and ESLint
+- Docker and Docker Compose for local application containers
 
 ## Unfiltered Swiss Job-Board Adapters
 
@@ -102,3 +103,21 @@
 - The frontend input is the FastAPI base URL. Output is a read-only dashboard;
   failed API requests display a retryable error and do not retain stale
   credentials or job data.
+
+## Application Containers
+
+- `frontend/Dockerfile` uses one Node 22 Alpine stage: install from the lockfile,
+  copy source, build Next.js, prune development packages, and start the
+  production server.
+- `frontend/next.config.ts` uses the normal Next.js server output so the simple
+  `npm start` container command works without standalone-file copying.
+- `backend/Dockerfile` installs `backend/requirements.txt` and starts the
+  FastAPI application with Uvicorn.
+- `compose.yaml` starts only `backend` and `frontend`. It passes AWS region,
+  table name, and optional credential environment variables to the backend;
+  it contains no DynamoDB image, table bootstrap, endpoint override, or AWS
+  resource provisioning.
+- Inputs are the AWS environment and optional frontend API build URL. Outputs
+  are the dashboard on port 3000 and API on port 8000. AWS connectivity errors
+  remain backend readiness or API failures and do not cause Compose to create a
+  replacement database.

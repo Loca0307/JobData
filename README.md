@@ -42,12 +42,6 @@ export AWS_REGION="eu-central-1"
 export DYNAMODB_TABLE_NAME="JobData"
 ```
 
-Optional DynamoDB Local endpoint:
-
-```bash
-export DYNAMODB_ENDPOINT_URL="http://localhost:8000"
-```
-
 The normal AWS credential provider chain is used. Never put AWS credentials in
 this repository or in the frontend.
 
@@ -139,6 +133,27 @@ npm run build
 
 The dashboard reads only aggregate counts and the latest run through FastAPI.
 It never connects to DynamoDB directly.
+
+## Docker Compose
+
+Compose runs only the FastAPI backend and Next.js frontend. It does not run,
+create, or configure DynamoDB.
+
+Export credentials that can access your AWS table, then start both services:
+
+```bash
+export AWS_REGION="eu-central-1"
+export DYNAMODB_TABLE_NAME="JobData"
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+export AWS_SESSION_TOKEN="..." # only for temporary credentials
+
+docker compose up --build
+```
+
+The dashboard is available at `http://localhost:3000` and FastAPI at
+`http://localhost:8000`. On AWS compute with an attached IAM role, omit the
+static credential variables and let boto3 use the role.
 
 ## Collection semantics
 

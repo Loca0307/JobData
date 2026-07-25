@@ -193,3 +193,27 @@ conditions under which the decision should be revisited.
   controlled environment.
 - **Revisit when:** Authentication, historical trends, or additional private
   analysis workflows are specified.
+
+## 9. Simple Application-Only Compose Setup
+
+- **Choice:** Use a single-stage frontend Dockerfile and run only the frontend
+  and backend in Compose. Connect the backend to the owner-managed AWS
+  DynamoDB table through environment variables.
+- **Why:** This is a small personal learning project, so a direct
+  install/build/start image is easier to understand and maintain. DynamoDB
+  lifecycle and configuration remain explicitly outside the application.
+- **Relevant files:** `frontend/Dockerfile`, `frontend/next.config.ts`,
+  `backend/Dockerfile`, `compose.yaml`, and `README.md`
+- **Other possibilities:**
+  - A multi-stage standalone Next.js image is smaller, but adds build stages,
+    copied output directories, users, and health-check machinery.
+  - DynamoDB Local in Compose makes offline development possible, but creates a
+    second database workflow that the owner does not want here.
+  - Provisioning AWS DynamoDB from Compose or application startup could reduce
+    setup steps, but violates the owner-managed infrastructure boundary.
+- **Constraints and risks:** Development packages are pruned from the final
+  filesystem, but their build layers still make the single-stage image larger
+  than an optimized runtime-only image. Local Compose users must supply usable
+  AWS credentials or run on compute with an attached IAM role.
+- **Revisit when:** Image size, supply-chain surface, deployment startup time,
+  or offline development becomes more important than configuration simplicity.
