@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>SwissDevJobs</title>
+  <item>
+    <title><![CDATA[Senior Platform Engineer @ Example AG [CHF 115'000 - 130'000]]]></title>
+    <link>https://swissdevjobs.ch/jobs/example?utm_source=rss&amp;ref=keep</link>
+    <guid>example-1</guid>
+    <pubDate>Fri, 20 Mar 2026 23:00:00 GMT</pubDate>
+    <description><![CDATA[
+      <p><b>Salary: CHF 115'000 - 130'000 per year</b></p>
+      <b>Requirements:</b><ul><li>German and English.</li></ul>
+      <b>Responsibilities:</b><ul><li>Build platforms.</li></ul>
+      <b>Technologies:</b><ul><li>Python</li><li>Kubernetes</li></ul>
+      <b>More:</b><p>Home office available.</p>
+    ]]></description>
+  </item>
+  <item>
+    <title>Junior Designer @ Other AG [CHF 80'000 - 90'000]</title>
+    <link>https://swissdevjobs.ch/jobs/other</link>
+    <guid>other-1</guid>
+    <description><![CDATA[<b>Responsibilities:</b><p>Design interfaces.</p>]]></description>
+  </item>
+</channel></rss>

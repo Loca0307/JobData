@@ -133,9 +133,7 @@ routes.
   scrapers when possible.
 - Treat major aggregators and job boards as independent adapters. Candidate
   sources include LinkedIn, Indeed, Glassdoor, Monster, ZipRecruiter, Dice,
-  StepStone, jobs.ch/JobCloud, and relevant national boards, but implement a
-  source only when access is permitted and a maintainable public interface is
-  available.
+  StepStone, jobs.ch/JobCloud, and relevant national boards.
 - Make source coverage configuration-driven. Adding or disabling a source
   should not require changes to orchestration or API code.
 - Apply per-source timeouts, bounded concurrency, retries with backoff and
@@ -212,17 +210,6 @@ routes.
 - Run the relevant tests after every implementation change and report anything
   that could not be verified.
 
-## Security and Data Governance
-
-- Collect only data needed for job-market analysis. Avoid applicant data and
-  unnecessary personal information.
-- Treat free-text job descriptions and raw payloads as untrusted input.
-- Prevent server-side request forgery when URLs can enter the system through
-  configuration or discovery.
-- Bound response sizes, decompression, redirects, and browser execution.
-- Redact secrets and sensitive values from logs, errors, fixtures, and docs.
-- Document retention or deletion choices once raw-data volume and legal scope
-  are known.
 
 ## Documentation Requirements
 
