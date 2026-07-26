@@ -97,6 +97,12 @@ Endpoints:
 - `GET /api/v1/health`
 - `GET /api/v1/readiness`
 - `GET /api/v1/stats/jobs`
+- `POST /api/v1/ingestion/runs`
+- `GET /api/v1/ingestion/runs/{run_id}`
+
+The ingestion POST creates a persisted run and returns `202 Accepted`
+immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES` in
+the background. Query the returned run ID to observe its status.
 
 Run backend checks:
 
@@ -129,8 +135,9 @@ npm run lint
 npm run build
 ```
 
-The dashboard reads only aggregate counts and the latest run through FastAPI.
-It never connects to DynamoDB directly.
+The dashboard reads aggregate counts and run status through FastAPI. “Run all
+scrapers” starts every enabled adapter, polls the returned run ID, and refreshes
+the totals when the run finishes. It never connects to DynamoDB directly.
 
 ## Docker Compose
 

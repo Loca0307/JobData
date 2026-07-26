@@ -40,3 +40,30 @@ export async function fetchJobCounts(signal?: AbortSignal): Promise<JobCounts> {
   }
   return response.json() as Promise<JobCounts>;
 }
+
+export async function startScrapeRun(): Promise<ScrapeRun> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/ingestion/runs`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`The JobData API returned ${response.status}.`);
+  }
+  return response.json() as Promise<ScrapeRun>;
+}
+
+export async function fetchScrapeRun(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<ScrapeRun> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/ingestion/runs/${encodeURIComponent(runId)}`,
+    {
+      signal,
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`The JobData API returned ${response.status}.`);
+  }
+  return response.json() as Promise<ScrapeRun>;
+}

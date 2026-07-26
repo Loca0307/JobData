@@ -65,6 +65,10 @@
 - `backend/app/workers/scrape_all.py` is the scheduler-neutral command-line
   entry point. It validates DynamoDB settings, builds every enabled adapter,
   invokes the pipeline, and prints the completed run summary.
+- `backend/app/services/ingestion.py` separates persisted run creation from
+  execution so HTTP callers can receive a running `ScrapeRun` before the
+  source work begins. The existing command-line worker still uses the combined
+  synchronous entry point.
 - The repository does not mark a listing inactive after a missing observation.
   Inactivity remains unchanged until a source-aware multi-run policy is
   implemented.
@@ -79,30 +83,41 @@
   DynamoDB configuration at startup, and permits configured frontend origins.
 - `backend/app/api/routes.py` exposes `/api/v1/health` without external work,
   `/api/v1/readiness` with a table readiness check, and
-  `/api/v1/stats/jobs` for total, per-source, and latest-run aggregates.
+  `/api/v1/stats/jobs` for total, per-source, and latest-run aggregates. It
+  also exposes `POST /api/v1/ingestion/runs` to persist and schedule a run and
+  `GET /api/v1/ingestion/runs/{run_id}` to read its strongly consistent status.
 - `backend/app/api/dependencies.py` constructs the repository behind a FastAPI
   dependency, keeping routes thin and replaceable in tests.
-- Inputs are GET requests. Outputs are typed JSON responses. DynamoDB or
-  configuration failures make readiness fail; health never starts a scrape.
-- `backend/tests/test_api.py` verifies the side-effect-free health response and
-  the bounded aggregate response with a fake repository.
+- Inputs are GET requests plus the bodyless ingestion POST. Outputs are typed
+  JSON responses; the POST returns `202 Accepted` with the running scrape-run
+  ID before its in-process background task executes. DynamoDB or configuration
+  failures make readiness fail; health never starts a scrape.
+- `backend/app/db/repositories.py` persists and reads individual run metadata.
+  `backend/tests/test_api.py` and `backend/tests/test_repository.py` verify the
+  side-effect-free health response, bounded aggregates, asynchronous run
+  creation, status lookup, missing-run response, and DynamoDB key access.
 
 ## Private Count Dashboard
 
 - `frontend/app/page.tsx` renders the single private overview screen through
   `frontend/components/job-overview.tsx`.
 - `frontend/lib/api.ts` is the typed API client. It reads only
-  `/api/v1/stats/jobs`; the browser never receives AWS credentials or direct
-  DynamoDB access.
+  aggregate and scrape-run endpoints; the browser never receives AWS
+  credentials or direct DynamoDB access.
 - `frontend/app/globals.css` provides the responsive layout, loading, empty,
-  failure, and run-status states. The dashboard shows total stored source
-  occurrences, one total for each implemented source, and the latest run.
+  failure, action, and run-status states. The dashboard shows total stored
+  source occurrences, one total for each implemented source, and the latest or
+  actively requested run.
+- `frontend/components/job-overview.tsx` starts all configured sources from
+  the “Run all scrapers” button, disables duplicate clicks while that run is
+  active, polls its exact run ID every two seconds, and refreshes aggregates
+  when it reaches a terminal state.
 - `frontend/app/layout.tsx`, `frontend/next.config.ts`,
   `frontend/tsconfig.json`, and `frontend/eslint.config.mjs` define the
   production Next.js shell and checks.
-- The frontend input is the FastAPI base URL. Output is a read-only dashboard;
-  failed API requests display a retryable error and do not retain stale
-  credentials or job data.
+- The frontend input is the FastAPI base URL. Output is a private operational
+  dashboard; failed reads and start requests display retryable errors and do
+  not retain credentials or job data.
 
 ## Application Containers
 

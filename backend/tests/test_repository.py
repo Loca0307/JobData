@@ -79,10 +79,29 @@ def test_run_and_latest_run_are_finished_together():
     assert transaction[1]["Put"]["Item"]["SK"]["S"] == "LATEST_RUN"
 
 
+def test_repository_reads_a_specific_scrape_run():
+    run = ScrapeRun(run_id="run-1")
+    client = RecordingClient(run=run)
+    repository = DynamoIngestionRepository(client, "JobData")
+
+    stored = repository.get_run("run-1")
+
+    assert stored == run
+    assert client.gets[0]["Key"]["PK"]["S"] == "RUN#run-1"
+    assert client.gets[0]["ConsistentRead"] is True
+
+
 class RecordingClient:
-    def __init__(self, *, existing: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        existing: bool = False,
+        run: ScrapeRun | None = None,
+    ) -> None:
         self.existing = existing
+        self.run = run
         self.transactions: list[list[dict]] = []
+        self.gets: list[dict] = []
 
     def update_item(self, **kwargs):
         if not self.existing and "ConditionExpression" in kwargs:
@@ -102,3 +121,25 @@ class RecordingClient:
     def transact_write_items(self, *, TransactItems):
         self.transactions.append(TransactItems)
         return {}
+
+    def get_item(self, **kwargs):
+        self.gets.append(kwargs)
+        if self.run is None:
+            return {}
+        return {
+            "Item": {
+                "PK": {"S": f"RUN#{self.run.run_id}"},
+                "SK": {"S": "META"},
+                "entity_type": {"S": "scrape_run"},
+                **{
+                    key: _serialize_attribute(value)
+                    for key, value in self.run.model_dump(mode="json").items()
+                },
+            }
+        }
+
+
+def _serialize_attribute(value):
+    from boto3.dynamodb.types import TypeSerializer
+
+    return TypeSerializer().serialize(value)

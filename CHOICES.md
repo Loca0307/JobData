@@ -176,10 +176,11 @@ conditions under which the decision should be revisited.
 - **Revisit when:** The dashboard needs historical series, grouped analytics,
   or independently repairable counters at much larger scale.
 
-## 8. Read-Only Next.js Dashboard Through FastAPI
+## 8. Private Operational Next.js Dashboard Through FastAPI
 
 - **Choice:** Put all DynamoDB access behind FastAPI and let a small Next.js
-  client fetch only the aggregate endpoint.
+  client fetch aggregate/run status and request ingestion through typed API
+  endpoints.
 - **Why:** It keeps AWS credentials out of the browser and maintains the
   repository/service boundaries required by this data platform.
 - **Relevant files:** `backend/app/api/`, `frontend/app/`,
@@ -189,6 +190,9 @@ conditions under which the decision should be revisited.
     authorization concerns and couples UI code to table keys.
   - Server-rendering the counts is possible, but makes the frontend build and
     runtime more dependent on backend network availability.
+  - Running scraper code in Next.js would avoid a backend POST, but would
+    duplicate Python ingestion logic and require AWS access in the frontend
+    runtime.
   - A charting library could add visuals, but three scalar counts do not
     justify another dependency.
 - **Constraints and risks:** The dashboard is a private operational shell and
@@ -227,3 +231,33 @@ conditions under which the decision should be revisited.
   application root remaining on Python's import path.
 - **Revisit when:** Image size, supply-chain surface, deployment startup time,
   or offline development becomes more important than configuration simplicity.
+
+## 10. In-Process Background Execution for Manually Started Runs
+
+- **Choice:** Persist a running scrape-run record during the POST request,
+  return `202 Accepted`, and execute the configured adapters with a FastAPI
+  background task. Expose a run-ID GET endpoint for polling.
+- **Why:** A full multi-source collection must not hold an HTTP request open.
+  The project does not yet have a deployment scheduler or queue, so the
+  in-process task is the smallest scheduler-neutral bridge from the private
+  dashboard to the existing ingestion service.
+- **Relevant files:** `backend/app/api/routes.py`,
+  `backend/app/services/ingestion.py`,
+  `backend/app/db/repositories.py`, `backend/tests/test_api.py`,
+  `backend/tests/test_repository.py`, `frontend/lib/api.ts`, and
+  `frontend/components/job-overview.tsx`
+- **Other possibilities:**
+  - Running ingestion synchronously in the POST is simpler, but ties request
+    lifetime to third-party pagination and violates the long-running endpoint
+    boundary.
+  - A durable queue and separate worker survive API restarts and scale across
+    instances, but require deployment infrastructure that has not been chosen.
+  - Starting a subprocess from the API reuses the CLI entry point, but makes
+    lifecycle, logging, and shutdown behavior harder to control.
+- **Constraints and risks:** The running record is durable but its in-process
+  task is not. Restarting or terminating the API can leave a run marked
+  `running`; concurrent API instances also do not coordinate duplicate manual
+  starts. Individual source failures are still isolated and persisted.
+- **Revisit when:** Runs need restart recovery, cancellation, scheduled
+  execution, cross-instance exclusivity, or a production deployment model is
+  selected.

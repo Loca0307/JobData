@@ -81,6 +81,7 @@ h1 {
   line-height: 1.6;
 }
 
+.run-scrapers,
 .refresh,
 .notice button {
   min-height: 44px;
@@ -93,11 +94,29 @@ h1 {
   white-space: nowrap;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.run-scrapers {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.refresh {
+  color: var(--ink);
+  background: transparent;
+}
+
+.run-scrapers:disabled,
 .refresh:disabled {
   cursor: wait;
   opacity: 0.58;
 }
 
+.run-scrapers:focus-visible,
 .refresh:focus-visible,
 .notice button:focus-visible {
   outline: 3px solid rgb(15 107 80 / 35%);
@@ -280,6 +299,11 @@ dd {
   .masthead {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .summary,

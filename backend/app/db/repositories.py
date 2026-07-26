@@ -25,6 +25,8 @@ class IngestionRepository(Protocol):
 
     def finish_run(self, run: ScrapeRun) -> None: ...
 
+    def get_run(self, run_id: str) -> ScrapeRun | None: ...
+
     def get_counts(self, source_names: tuple[str, ...]) -> JobCounts: ...
 
 
@@ -194,6 +196,24 @@ class DynamoIngestionRepository:
                     }
                 },
             ]
+        )
+
+    def get_run(self, run_id: str) -> ScrapeRun | None:
+        response = self._client.get_item(
+            TableName=self._table_name,
+            Key=_serialize_item({"PK": f"RUN#{run_id}", "SK": "META"}),
+            ConsistentRead=True,
+        )
+        raw_item = response.get("Item")
+        if not raw_item:
+            return None
+        item = _deserialize_item(raw_item)
+        return ScrapeRun.model_validate(
+            {
+                key: value
+                for key, value in item.items()
+                if key not in {"PK", "SK", "entity_type"}
+            }
         )
 
     def get_counts(self, source_names: tuple[str, ...]) -> JobCounts:

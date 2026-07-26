@@ -22,6 +22,19 @@ def ingest_all_sources(
     *,
     max_workers: int = 3,
 ) -> ScrapeRun:
+    run = create_scrape_run(scrapers, repository)
+    return execute_scrape_run(
+        run,
+        scrapers,
+        repository,
+        max_workers=max_workers,
+    )
+
+
+def create_scrape_run(
+    scrapers: list[BaseJobScraper],
+    repository: IngestionRepository,
+) -> ScrapeRun:
     if not scrapers:
         raise NoEnabledSourcesError(
             "No scraper sources are enabled. Set SCRAPER_ENABLED_SOURCES to "
@@ -30,6 +43,16 @@ def ingest_all_sources(
 
     run = ScrapeRun(run_id=str(uuid4()))
     repository.create_run(run)
+    return run
+
+
+def execute_scrape_run(
+    run: ScrapeRun,
+    scrapers: list[BaseJobScraper],
+    repository: IngestionRepository,
+    *,
+    max_workers: int = 3,
+) -> ScrapeRun:
     workers = min(max_workers, len(scrapers))
     with ThreadPoolExecutor(max_workers=workers) as executor:
         tasks = {

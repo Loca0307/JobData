@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchJobCounts, type JobCounts } from "@/lib/api";
+import {
+  fetchJobCounts,
+  fetchScrapeRun,
+  startScrapeRun,
+  type JobCounts,
+  type ScrapeRun,
+} from "@/lib/api";
 
 const SOURCE_LABELS: Record<string, string> = {
   "jobs.ch": "jobs.ch",
@@ -20,6 +26,9 @@ export function JobOverview() {
   const [counts, setCounts] = useState<JobCounts | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeRun, setActiveRun] = useState<ScrapeRun | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [isStartingRun, setIsStartingRun] = useState(false);
 
   const loadCounts = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -70,6 +79,61 @@ export function JobOverview() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (!activeRun || activeRun.status !== "running") {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      void fetchScrapeRun(activeRun.run_id, controller.signal)
+        .then((run) => {
+          setActiveRun(run);
+          setRunError(null);
+          if (run.status !== "running") {
+            void loadCounts();
+          }
+        })
+        .catch((pollError: unknown) => {
+          if (
+            pollError instanceof DOMException &&
+            pollError.name === "AbortError"
+          ) {
+            return;
+          }
+          setRunError(
+            pollError instanceof Error
+              ? pollError.message
+              : "The scrape-run status could not be loaded.",
+          );
+        });
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [activeRun, loadCounts]);
+
+  const runAllScrapers = useCallback(async () => {
+    setIsStartingRun(true);
+    setRunError(null);
+    try {
+      setActiveRun(await startScrapeRun());
+    } catch (startError) {
+      setRunError(
+        startError instanceof Error
+          ? startError.message
+          : "The scraper run could not be started.",
+      );
+    } finally {
+      setIsStartingRun(false);
+    }
+  }, []);
+
+  const displayedRun = activeRun ?? counts?.latest_run ?? null;
+  const isRunActive = activeRun?.status === "running";
+
   return (
     <main>
       <header className="masthead">
@@ -80,14 +144,28 @@ export function JobOverview() {
             A compact view of the job occurrences currently stored in DynamoDB.
           </p>
         </div>
-        <button
-          className="refresh"
-          type="button"
-          onClick={() => void loadCounts()}
-          disabled={isLoading}
-        >
-          {isLoading ? "Refreshing…" : "Refresh totals"}
-        </button>
+        <div className="header-actions">
+          <button
+            className="run-scrapers"
+            type="button"
+            onClick={() => void runAllScrapers()}
+            disabled={isStartingRun || isRunActive}
+          >
+            {isStartingRun
+              ? "Starting…"
+              : isRunActive
+                ? "Scrapers running…"
+                : "Run all scrapers"}
+          </button>
+          <button
+            className="refresh"
+            type="button"
+            onClick={() => void loadCounts()}
+            disabled={isLoading}
+          >
+            {isLoading ? "Refreshing…" : "Refresh totals"}
+          </button>
+        </div>
       </header>
 
       {error ? (
@@ -97,6 +175,18 @@ export function JobOverview() {
             <p>{error} Check that the FastAPI backend is running and ready.</p>
           </div>
           <button type="button" onClick={() => void loadCounts()}>
+            Try again
+          </button>
+        </section>
+      ) : null}
+
+      {runError ? (
+        <section className="notice error" role="alert">
+          <div>
+            <strong>Scraper action failed</strong>
+            <p>{runError} Check the backend logs for the source failure.</p>
+          </div>
+          <button type="button" onClick={() => void runAllScrapers()}>
             Try again
           </button>
         </section>
@@ -133,33 +223,33 @@ export function JobOverview() {
           <p className="eyebrow">Ingestion health</p>
           <h2 id="latest-run-heading">Latest run</h2>
         </div>
-        {counts?.latest_run ? (
+        {displayedRun ? (
           <div className="run-details">
-            <span className={`status ${counts.latest_run.status}`}>
-              {counts.latest_run.status}
+            <span className={`status ${displayedRun.status}`}>
+              {displayedRun.status}
             </span>
             <dl>
               <div>
                 <dt>Completed</dt>
                 <dd>
-                  {counts.latest_run.completed_at
+                  {displayedRun.completed_at
                     ? dateFormatter.format(
-                        new Date(counts.latest_run.completed_at),
+                        new Date(displayedRun.completed_at),
                       )
                     : "Still running"}
                 </dd>
               </div>
               <div>
                 <dt>Seen</dt>
-                <dd>{numberFormatter.format(counts.latest_run.jobs_seen)}</dd>
+                <dd>{numberFormatter.format(displayedRun.jobs_seen)}</dd>
               </div>
               <div>
                 <dt>New</dt>
-                <dd>{numberFormatter.format(counts.latest_run.jobs_created)}</dd>
+                <dd>{numberFormatter.format(displayedRun.jobs_created)}</dd>
               </div>
               <div>
                 <dt>Updated</dt>
-                <dd>{numberFormatter.format(counts.latest_run.jobs_updated)}</dd>
+                <dd>{numberFormatter.format(displayedRun.jobs_updated)}</dd>
               </div>
             </dl>
           </div>
