@@ -12,7 +12,7 @@ from app.scrapers.base import BaseJobScraper
 logger = logging.getLogger(__name__)
 
 
-class NoAuthorizedSourcesError(RuntimeError):
+class NoEnabledSourcesError(RuntimeError):
     pass
 
 
@@ -23,9 +23,9 @@ def ingest_all_sources(
     max_workers: int = 3,
 ) -> ScrapeRun:
     if not scrapers:
-        raise NoAuthorizedSourcesError(
-            "No authorized sources are enabled. Obtain source permission and "
-            "set the corresponding *_SCRAPING_AUTHORIZED variable."
+        raise NoEnabledSourcesError(
+            "No scraper sources are enabled. Set SCRAPER_ENABLED_SOURCES to "
+            "one or more registered source names."
         )
 
     run = ScrapeRun(run_id=str(uuid4()))

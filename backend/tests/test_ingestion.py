@@ -5,7 +5,7 @@ import pytest
 from app.models.jobs import NormalizedJob, SourceRecord
 from app.models.runs import JobCounts, RunStatus, ScrapeRun, SourceRunResult
 from app.scrapers.base import BaseJobScraper, ScrapeError
-from app.services.ingestion import NoAuthorizedSourcesError, ingest_all_sources
+from app.services.ingestion import NoEnabledSourcesError, ingest_all_sources
 
 
 def record(source: str, source_job_id: str) -> SourceRecord:
@@ -107,10 +107,10 @@ def test_reingestion_updates_sightings_without_duplicate_creation():
     assert second.jobs_updated == 1
 
 
-def test_no_authorized_sources_stops_before_creating_a_run():
+def test_no_enabled_sources_stops_before_creating_a_run():
     repository = FakeRepository()
 
-    with pytest.raises(NoAuthorizedSourcesError):
+    with pytest.raises(NoEnabledSourcesError, match="SCRAPER_ENABLED_SOURCES"):
         ingest_all_sources([], repository)
 
     assert repository.created_run is None

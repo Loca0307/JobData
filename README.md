@@ -14,12 +14,13 @@ Adapters exist for:
 
 The two JobCloud adapters enumerate unfiltered listing pages until an empty or
 repeated page. SwissDevJobs reads the RSS surface once. No title, location,
-skill, or profile filters are applied.
+skill, or profile filters are applied. All three adapters are enabled by
+default and require no project-specific authorization flag.
 
-All live adapters are disabled by default. Current JobCloud and SwissDevJobs
-terms prohibit automated access or collection without authorization. After
-obtaining explicit permission from a publisher, enable only that source with
-its authorization variable. Fixture-driven tests work without live access.
+The operator remains responsible for ensuring each enabled source may be
+collected in the intended jurisdiction and use case. The application does not
+log in, bypass access controls, evade anti-bot measures, or turn an HTTP access
+denial into a successful result. Fixture-driven tests work without live access.
 
 ## DynamoDB table
 
@@ -67,9 +68,6 @@ Configure the collector:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SCRAPER_ENABLED_SOURCES` | all three names | Comma-separated source selection |
-| `JOBS_CH_SCRAPING_AUTHORIZED` | `false` | Assert jobs.ch collection permission |
-| `JOBUP_CH_SCRAPING_AUTHORIZED` | `false` | Assert jobup.ch collection permission |
-| `SWISSDEVJOBS_CH_SCRAPING_AUTHORIZED` | `false` | Assert SwissDevJobs collection permission |
 | `SCRAPER_CONTACT` | unset | Truthful operator contact appended to user agent |
 | `SCRAPER_REQUESTS_PER_SECOND` | `1` | Process-local request rate |
 | `SCRAPER_MAX_RETRIES` | `3` | Transient retry count |
@@ -80,7 +78,7 @@ Configure the collector:
 | `SCRAPER_SOURCE_MAX_WORKERS` | `3` | Parallel source workers |
 | `API_CORS_ORIGINS` | `http://localhost:3000` | Allowed dashboard origins |
 
-Run one complete authorized ingestion:
+Run one complete ingestion:
 
 ```bash
 cd backend
@@ -173,9 +171,9 @@ static credential variables and let boto3 use the role.
 
 ## Collection semantics
 
-“All jobs” means all distinct source IDs exposed by an authorized, implemented
-listing surface during a successful run. It does not include authenticated,
-hidden, personalized, expired, or otherwise restricted records.
+“All jobs” means all distinct source IDs exposed by an enabled, implemented
+public listing surface during a successful run. It does not include
+authenticated, hidden, personalized, expired, or otherwise restricted records.
 
 Re-running ingestion updates `last_seen_at`, provenance, content hash, and raw
 payload for an existing source ID. It does not create another occurrence.

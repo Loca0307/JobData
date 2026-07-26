@@ -6,7 +6,7 @@ import logging
 from app.core.settings import get_settings
 from app.db.dynamodb import get_dynamodb_client
 from app.db.repositories import DynamoIngestionRepository
-from app.scrapers.registry import get_blocked_sources, get_configured_scrapers
+from app.scrapers.registry import get_configured_scrapers
 from app.services.ingestion import ingest_all_sources
 
 
@@ -21,12 +21,6 @@ def main() -> None:
     )
     settings = get_settings()
     _, table_name = settings.require_dynamodb()
-    blocked = get_blocked_sources(settings)
-    if blocked:
-        logging.getLogger(__name__).warning(
-            "Configured sources remain disabled pending explicit authorization",
-            extra={"source": ",".join(sorted(blocked))},
-        )
     repository = DynamoIngestionRepository(
         get_dynamodb_client(),
         table_name,

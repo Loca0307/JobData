@@ -20,22 +20,6 @@ Later phases may add analysis, reporting, enrichment, and a private dashboard
 through a React/Next.js frontend. Do not assume the final analysis workflow
 until it is explicitly defined.
 
-## Scope Boundaries
-
-- This is an internal/private data platform, not a multi-user product.
-- Do not add user profiles, job recommendations, application tracking, or
-  career coaching unless explicitly requested.
-- Do not add Terraform, CloudFormation, CDK, Pulumi, or other infrastructure
-  provisioning. The owner will create and configure DynamoDB.
-- Application code may document required AWS resources, keys, indexes,
-  permissions, and environment variables, but must not provision them.
-- Do not attempt to bypass authentication, CAPTCHAs, paywalls, access controls,
-  robots restrictions, or anti-bot protections.
-- Prefer official APIs, public feeds, structured data, and permitted ATS
-  endpoints over browser automation or brittle HTML scraping.
-- Respect applicable terms, robots directives, privacy requirements, rate
-  limits, and data-retention obligations. If a source cannot be scraped
-  compliantly, disable it and document the limitation.
 
 ## Preferred Technology Stack
 

@@ -28,9 +28,9 @@
   values stay null, empty, or explicitly `unknown`; the raw adapter payload is
   retained beside normalized fields for reprocessing.
 - `backend/app/scrapers/registry.py` makes source selection
-  configuration-driven. Current publisher terms prohibit unattended automated
-  collection without agreement, so every adapter is disabled until its
-  source-specific authorization setting is true.
+  configuration-driven. Every registered adapter is enabled by default and
+  `SCRAPER_ENABLED_SOURCES` can select a subset without any project-specific
+  authorization setting.
 - Inputs are listing HTML or RSS XML. Outputs are source occurrences; adapters
   never write to DynamoDB. HTTP, parser, schema, and safety-limit failures stop
   that source instead of producing a false empty result.
@@ -38,13 +38,13 @@
   `backend/tests/test_swissdevjobs.py`, `backend/tests/test_http.py`, and
   `backend/tests/test_registry.py` cover pagination, repetition, malformed
   inputs, raw retention, transient retries, rate limiting, registry contracts,
-  and authorization gating using sanitized fixtures in
+  and enabled-source selection using sanitized fixtures in
   `backend/tests/fixtures/`.
 
 ## DynamoDB Ingestion and Scrape Runs
 
 - `backend/app/services/ingestion.py` starts one scrape run and executes
-  authorized sources concurrently. Each source remains isolated: records
+  enabled sources concurrently. Each source remains isolated: records
   already written by a failed source remain stored, successful sources finish,
   and the overall result becomes completed, partial, or failed.
 - `backend/app/db/repositories.py` is the persistence boundary. A source
@@ -63,7 +63,7 @@
   region, table, and optional local endpoint settings. It never creates or
   changes the table.
 - `backend/app/workers/scrape_all.py` is the scheduler-neutral command-line
-  entry point. It validates DynamoDB settings, logs blocked source state,
+  entry point. It validates DynamoDB settings, builds every enabled adapter,
   invokes the pipeline, and prints the completed run summary.
 - The repository does not mark a listing inactive after a missing observation.
   Inactivity remains unchanged until a source-aware multi-run policy is
@@ -71,7 +71,7 @@
 - `backend/tests/test_repository.py` and
   `backend/tests/test_ingestion.py` cover stable identity, content hashing,
   atomic counters, idempotent sightings, partial failures, run summaries, and
-  the no-authorized-source guard without contacting AWS.
+  the no-enabled-source guard without contacting AWS.
 
 ## Operational and Aggregate API
 

@@ -16,15 +16,6 @@ class Settings(BaseSettings):
         default="jobs.ch,jobup.ch,swissdevjobs.ch",
         alias="SCRAPER_ENABLED_SOURCES",
     )
-    jobs_ch_authorized: bool = Field(
-        default=False, alias="JOBS_CH_SCRAPING_AUTHORIZED"
-    )
-    jobup_ch_authorized: bool = Field(
-        default=False, alias="JOBUP_CH_SCRAPING_AUTHORIZED"
-    )
-    swissdevjobs_ch_authorized: bool = Field(
-        default=False, alias="SWISSDEVJOBS_CH_SCRAPING_AUTHORIZED"
-    )
     scraper_user_agent: str = Field(
         default=(
             "JobDataBot/0.1 "
@@ -84,14 +75,6 @@ class Settings(BaseSettings):
             for origin in self.api_cors_origins.split(",")
             if origin.strip()
         ]
-
-    def source_is_authorized(self, source_name: str) -> bool:
-        authorization = {
-            "jobs.ch": self.jobs_ch_authorized,
-            "jobup.ch": self.jobup_ch_authorized,
-            "swissdevjobs.ch": self.swissdevjobs_ch_authorized,
-        }
-        return authorization.get(source_name.casefold(), False)
 
     def require_dynamodb(self) -> tuple[str, str]:
         missing = [

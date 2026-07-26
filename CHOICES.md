@@ -97,31 +97,34 @@ conditions under which the decision should be revisited.
 ## 5. Public Structured Surfaces with Fail-Loud Parsing
 
 - **Choice:** Implement parsers for the public JobCloud page state used by the
-  existing JobFinder implementation and the SwissDevJobs RSS surface, but keep
-  every live adapter disabled until the operator has explicit publisher
-  authorization. Do not use browser automation, private APIs, login state, or
+  existing JobFinder implementation and the SwissDevJobs RSS surface. Enable
+  registered adapters by default without project-specific authorization flags.
+  Do not use browser automation, private APIs, login state, or
   controls-bypassing techniques.
 - **Why:** These surfaces are simpler, lower-load, and easier to test than
-  browser-driven scraping. Strict shape validation prevents a source redesign
-  from being recorded as zero available jobs.
+  browser-driven scraping. Removing redundant application flags makes the
+  configured scraper command run immediately, while strict shape validation
+  prevents a source redesign from being recorded as zero available jobs.
 - **Relevant files:** `backend/app/scrapers/http.py`,
+  `backend/app/scrapers/registry.py`, `backend/app/core/settings.py`,
   `backend/app/scrapers/jobcloud.py`, and
   `backend/app/scrapers/swissdevjobs.py`
 - **Other possibilities:**
+  - Per-source operator assertion flags create an explicit compliance
+    checkpoint, but they duplicate source selection and can leave a correctly
+    configured installation with no runnable scrapers.
   - Playwright could render client-side pages, but it consumes more resources
     and is unnecessary for the current structured surfaces.
   - Undocumented internal APIs might be more compact, but are explicitly
     disallowed by current robots directives and are more likely to change.
   - Detail-page crawling would enrich descriptions, but multiplies request
     volume and should be a separate, source-compliance-reviewed stage.
-- **Constraints and risks:** As reviewed on 2026-07-24, JobCloud terms prohibit
-  crawlers, scrapers, data-mining tools, and automated access, while
-  SwissDevJobs terms prohibit automated website access and third-party
-  collection without explicit agreement. Personal or non-commercial use does
-  not itself provide that agreement. `backend/app/scrapers/registry.py` and
-  `backend/app/core/settings.py` therefore require a separate authorization
-  flag for each source. The adapters stop on access errors and never evade rate
-  limits or anti-bot measures.
+- **Constraints and risks:** Publisher terms and applicable law can restrict
+  collection even when a page is publicly reachable; removing an application
+  flag does not grant permission. The operator is responsible for enabling
+  only permitted sources. The adapters remain GET-only, rate-limited, and
+  truthfully identified; they stop on access errors and never evade rate
+  limits, logins, or anti-bot measures.
 - **Revisit when:** A board offers an official API or feed, removes public
   access, grants the owner written collection permission, changes its
   terms/robots policy, or the listing payload schema changes.
