@@ -38,12 +38,12 @@ needs `dynamodb:DescribeTable`, `dynamodb:GetItem`,
 Required environment:
 
 ```bash
-export AWS_REGION="eu-central-1"
+export AWS_REGION="eu-south-1"
 export DYNAMODB_TABLE_NAME="JobData"
 ```
 
-The normal AWS credential provider chain is used. Never put AWS credentials in
-this repository or in the frontend.
+The normal AWS credential provider chain is used. Never commit AWS credentials
+or expose them to the frontend.
 
 ## Backend
 
@@ -139,15 +139,31 @@ It never connects to DynamoDB directly.
 Compose runs only the FastAPI backend and Next.js frontend. It does not run,
 create, or configure DynamoDB.
 
-Export credentials that can access your AWS table, then start both services:
+Create the ignored root `.env` file beside `compose.yaml`:
 
 ```bash
-export AWS_REGION="eu-central-1"
-export DYNAMODB_TABLE_NAME="JobData"
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_SESSION_TOKEN="..." # only for temporary credentials
+cp .env.example .env
+```
 
+Use `aws configure export-credentials --profile docker-role --format env` to
+obtain temporary assumed-role values, then replace the three credential
+placeholders in `.env`. Keep the non-secret settings aligned with the
+owner-created table:
+
+```dotenv
+AWS_ACCESS_KEY_ID=<temporary role access key>
+AWS_SECRET_ACCESS_KEY=<temporary role secret key>
+AWS_SESSION_TOKEN=<temporary role session token>
+AWS_REGION=eu-south-1
+DYNAMODB_TABLE_NAME=JobData
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+Do not commit `.env`; it is ignored by Git. Temporary role credentials expire,
+so refresh those three values and recreate the backend when necessary. Start
+both services with:
+
+```bash
 docker compose up --build
 ```
 

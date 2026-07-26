@@ -1,1 +1,0 @@
-"""Internal domain models."""

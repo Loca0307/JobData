@@ -198,12 +198,15 @@ conditions under which the decision should be revisited.
 
 - **Choice:** Use a single-stage frontend Dockerfile and run only the frontend
   and backend in Compose. Connect the backend to the owner-managed AWS
-  DynamoDB table through environment variables.
+  DynamoDB table through temporary assumed-role values in an ignored root
+  `.env` file, and use Python namespace packages without `__init__.py` marker
+  files.
 - **Why:** This is a small personal learning project, so a direct
   install/build/start image is easier to understand and maintain. DynamoDB
   lifecycle and configuration remain explicitly outside the application.
-- **Relevant files:** `frontend/Dockerfile`, `frontend/next.config.ts`,
-  `backend/Dockerfile`, `compose.yaml`, and `README.md`
+- **Relevant files:** `.env.example`, `frontend/Dockerfile`,
+  `frontend/next.config.ts`, `backend/Dockerfile`, `compose.yaml`, and
+  `README.md`
 - **Other possibilities:**
   - A multi-stage standalone Next.js image is smaller, but adds build stages,
     copied output directories, users, and health-check machinery.
@@ -211,9 +214,13 @@ conditions under which the decision should be revisited.
     second database workflow that the owner does not want here.
   - Provisioning AWS DynamoDB from Compose or application startup could reduce
     setup steps, but violates the owner-managed infrastructure boundary.
+  - Traditional Python packages with `__init__.py` markers are more explicit
+    and support package initialization hooks, but the current marker files
+    contained only docstrings and were removed at the owner's request.
 - **Constraints and risks:** Development packages are pruned from the final
   filesystem, but their build layers still make the single-stage image larger
-  than an optimized runtime-only image. Local Compose users must supply usable
-  AWS credentials or run on compute with an attached IAM role.
+  than an optimized runtime-only image. Local Compose users must refresh
+  temporary credentials after expiry. Namespace packages rely on the backend
+  application root remaining on Python's import path.
 - **Revisit when:** Image size, supply-chain surface, deployment startup time,
   or offline development becomes more important than configuration simplicity.

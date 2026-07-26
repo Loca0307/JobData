@@ -114,10 +114,15 @@
 - `backend/Dockerfile` installs `backend/requirements.txt` and starts the
   FastAPI application with Uvicorn.
 - `compose.yaml` starts only `backend` and `frontend`. It passes AWS region,
-  table name, and optional credential environment variables to the backend;
-  it contains no DynamoDB image, table bootstrap, endpoint override, or AWS
+  table name, and required local credential environment variables from the
+  ignored root `.env` file to the backend. `.env.example` documents the
+  temporary assumed-role credential fields without containing secrets.
+- Backend directories are Python namespace packages and therefore do not
+  contain `__init__.py` marker files. Imports continue to resolve from the
+  backend application root in the Python 3.12 runtime.
+- Inputs are the root `.env` values and optional frontend API build URL.
+  Outputs are the dashboard on port 3000 and API on port 8000. Missing local
+  credentials fail Compose interpolation before startup; expired or
+  unauthorized credentials remain backend readiness or API failures. Compose
+  contains no DynamoDB image, table bootstrap, endpoint override, or AWS
   resource provisioning.
-- Inputs are the AWS environment and optional frontend API build URL. Outputs
-  are the dashboard on port 3000 and API on port 8000. AWS connectivity errors
-  remain backend readiness or API failures and do not cause Compose to create a
-  replacement database.
