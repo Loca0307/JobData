@@ -68,7 +68,7 @@ class DynamoIngestionRepository:
         )
 
     def save_record(self, record: SourceRecord, run_id: str) -> bool:
-        now = record.normalized_job.scraped_at.astimezone(UTC).isoformat()
+        now = record.normalized_job.scrape_timestamp.astimezone(UTC).isoformat()
         job_id = stable_job_id(record.source_name, record.source_job_id)
         key = {
             "PK": f"JOB#{job_id}",

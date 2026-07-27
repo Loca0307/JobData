@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Dev comments
+
+- As I am using this project to understand better things, implememt the features using the best practices but as simply as possible, and add comments on the most complicated or domain specific parts of the code.
+
 ## Project Overview
 
 JobData is a private, data-first job-market ingestion and analysis platform.
@@ -8,11 +12,11 @@ project, but it is not a user-facing job-search or recommendation product.
 
 The first phase must:
 
-1. Collect as much useful job-posting data as is legally and technically
+1. Collect as much useful job-posting data as is technically
    reasonable from major job boards, ATS platforms, and company career pages.
 2. Normalize the data without discarding the original source payload.
 3. Deduplicate repeated listings while preserving source provenance.
-4. Store jobs, scrape runs, source state, and failures in a DynamoDB table
+4. Store jobs in a DynamoDB table
    configured and provisioned by the project owner.
 5. Expose operational and data-access endpoints through FastAPI.
 
@@ -29,7 +33,7 @@ until it is explicitly defined.
 - HTTP scraping: HTTPX or Requests with shared retry, timeout, and throttling
   policies
 - HTML parsing: BeautifulSoup
-- Browser automation: Playwright only when permitted and necessary
+- Browser automation: Playwright only when necessary
 - Scheduling/workers: keep interfaces scheduler-neutral until a deployment
   approach is chosen
 - Backend dependency management: `uv` preferred
@@ -37,8 +41,7 @@ until it is explicitly defined.
   opt-in
 - Frontend: Next.js, React, TypeScript
 - Frontend package management: npm
-- Local development: Docker/Docker Compose may be used for the application and
-  DynamoDB Local
+- Local development: Docker/Docker Compose 
 
 Do not introduce a new framework or infrastructure dependency without a clear
 need and an entry in `CHOICES.md`.

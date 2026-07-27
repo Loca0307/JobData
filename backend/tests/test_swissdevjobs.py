@@ -47,31 +47,22 @@ def test_scrape_fetches_feed_and_enriches_every_entry_without_filtering():
     assert client.urls == list(pages)
     job = records[0].normalized_job
     assert job.title == "Senior Platform Engineer"
-    assert job.company_name == "Example AG"
-    assert job.company_identifiers == {
-        "source_company_id": "company-1"
-    }
-    assert str(job.company_website) == "https://example.test/"
-    assert job.raw_location_text == "Example Street 1, 8000 Zürich"
-    assert job.locations == ["Example Street 1, 8000 Zürich"]
+    assert job.company == "Example AG"
+    assert job.location == "Example Street 1, 8000 Zürich"
     assert job.employment_type == "Full-Time"
-    assert job.occupation == "Python"
     assert job.seniority == "Senior"
-    assert job.workplace_type == "hybrid"
-    assert job.salary_minimum == 115_000
-    assert job.salary_maximum == 130_000
-    assert job.salary_currency == "CHF"
-    assert job.salary_period == "YEAR"
-    assert job.required_skills == ["Python", "Kubernetes"]
-    assert job.languages == ["German"]
-    assert job.benefits == ["flexiblework", "parttime"]
-    assert job.expires_at.isoformat() == "2026-09-20T23:00:00+00:00"
-    assert job.updated_at.isoformat() == "2026-07-25T10:54:07+00:00"
-    assert job.parser_version == "swissdevjobs-detail-v2"
+    assert job.remote_type == "hybrid"
+    assert job.salary == "CHF 115'000 - 130'000"
+    assert job.required_languages == ["German"]
+    assert job.source_website == "swissdevjobs.ch"
+    assert job.external_id == "example-1"
     assert records[0].raw_payload["rss"]["guid"] == "example-1"
-    assert records[0].raw_payload["detail"]["extraEvidence"] == {
+    detail = records[0].raw_payload["detail"]
+    assert detail["extraEvidence"] == {
         "keep": True
     }
+    assert detail["technologies"] == ["Python", "Kubernetes", "Python"]
+    assert detail["annualSalaryFrom"] == 115_000
 
 
 def test_feed_normalization_retains_sections_and_lossless_source_fields():
@@ -79,12 +70,11 @@ def test_feed_normalization_retains_sections_and_lossless_source_fields():
     job = records[0].normalized_job
 
     assert job.title == "Senior Platform Engineer"
-    assert job.company_name == "Example AG"
-    assert job.salary_raw == "CHF 115'000 - 130'000"
+    assert job.company == "Example AG"
+    assert job.salary == "CHF 115'000 - 130'000"
     assert job.requirements == "German and English."
-    assert job.responsibilities == "Build platforms."
     assert "Python\nKubernetes" in job.description
-    assert job.posted_at.isoformat() == "2026-03-20T23:00:00+00:00"
+    assert job.posting_date.isoformat() == "2026-03-20T23:00:00+00:00"
     assert str(job.source_url) == (
         "https://swissdevjobs.ch/jobs/example?ref=keep"
     )

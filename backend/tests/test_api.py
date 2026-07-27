@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 import app.api.routes as routes
-from app.api.dependencies import get_ingestion_repository
 from app.api.main import create_app
+from app.api.routes import get_ingestion_repository
 from app.models.runs import JobCounts, RunStatus, ScrapeRun
 
 

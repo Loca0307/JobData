@@ -42,9 +42,6 @@ class Settings(BaseSettings):
     scraper_max_pages: int = Field(
         default=2_000, ge=1, alias="SCRAPER_MAX_PAGES"
     )
-    scraper_max_workers: int = Field(
-        default=3, ge=1, le=16, alias="SCRAPER_MAX_WORKERS"
-    )
     scraper_source_max_workers: int = Field(
         default=3, ge=1, le=3, alias="SCRAPER_SOURCE_MAX_WORKERS"
     )

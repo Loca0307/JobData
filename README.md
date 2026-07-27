@@ -22,13 +22,15 @@ authorization flag.
 
 Each DynamoDB `job_occurrence` stores canonical fields in the
 `normalized_job` map and the complete source evidence in the `raw_payload`
-map. Depending on what the publisher exposes, canonical data can include title
-and position, company, full description, responsibilities, requirements,
-address/location, work arrangement, employment type, schedule, seniority,
-occupation, salary range/currency/period, skills, languages, benefits, apply
-URL, and posting/expiry/update dates. A field stays null or empty when the
-source does not publish it; in particular, the scraper does not estimate
-undisclosed salaries.
+map, with no second raw-payload copy nested inside the normalized data.
+The compact normalized map follows the neighboring JobFinder model: title,
+company, one location string, description, requirements, seniority,
+employment type, remote type, salary text, required languages, source and
+apply URLs, posting/scrape timestamps, and external source ID. More specialized
+publisher data—such as responsibilities, technologies, benefits, structured
+salary components, company metadata, and expiry/update dates—remains in
+`raw_payload`. A normalized field stays null or empty when the source does not
+publish it; in particular, the scraper does not estimate undisclosed salaries.
 
 The operator remains responsible for ensuring each enabled source may be
 collected in the intended jurisdiction and use case. The application does not

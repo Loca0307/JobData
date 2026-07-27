@@ -11,16 +11,12 @@ from app.services.ingestion import NoEnabledSourcesError, ingest_all_sources
 def record(source: str, source_job_id: str) -> SourceRecord:
     raw = {"id": source_job_id}
     job = NormalizedJob(
-        source_name=source,
-        source_job_id=source_job_id,
-        source_url=f"https://example.test/{source_job_id}",
         title=f"Job {source_job_id}",
-        parser_version="test-v1",
-        raw_payload=raw,
+        source_website=source,
+        source_url=f"https://example.test/{source_job_id}",
+        external_id=source_job_id,
     )
     return SourceRecord(
-        source_name=source,
-        source_job_id=source_job_id,
         raw_payload=raw,
         normalized_job=job,
     )

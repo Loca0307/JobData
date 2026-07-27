@@ -11,7 +11,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 
 from app.core.settings import Settings, get_settings
-from app.models.jobs import NormalizedJob, SourceRecord, WorkplaceType
+from app.models.jobs import NormalizedJob, SourceRecord
 from app.scrapers.base import BaseJobScraper, ScrapeError
 from app.scrapers.http import RequestRateLimiter, ScraperHttpClient
 
@@ -19,7 +19,6 @@ from app.scrapers.http import RequestRateLimiter, ScraperHttpClient
 class SwissDevJobsScraper(BaseJobScraper):
     source_name = "swissdevjobs.ch"
     feed_url = "https://swissdevjobs.ch/rss"
-    parser_version = "swissdevjobs-rss-v1"
 
     def __init__(
         self,
@@ -77,29 +76,23 @@ class SwissDevJobsScraper(BaseJobScraper):
         description_html = _element_text(item, "description") or ""
         soup = BeautifulSoup(description_html, "html.parser")
         requirements = _section_text(soup, "Requirements")
-        responsibilities = _section_text(soup, "Responsibilities")
         salary = _salary_from_description(soup) or title_salary
         description = soup.get_text("\n", strip=True)
 
         raw["canonical_url"] = canonical_url
         normalized = NormalizedJob(
-            source_name=self.source_name,
-            source_job_id=source_job_id,
+            title=title,
+            company=company,
+            description=description or None,
+            requirements=requirements,
+            salary=salary,
+            source_website=self.source_name,
             source_url=canonical_url,
             apply_url=canonical_url,
-            title=title,
-            company_name=company,
-            description=description or None,
-            responsibilities=responsibilities,
-            requirements=requirements,
-            salary_raw=salary,
-            posted_at=_parse_date(_element_text(item, "pubDate")),
-            parser_version=self.parser_version,
-            raw_payload=raw,
+            posting_date=_parse_date(_element_text(item, "pubDate")),
+            external_id=source_job_id,
         )
         return SourceRecord(
-            source_name=self.source_name,
-            source_job_id=source_job_id,
             raw_payload=raw,
             normalized_job=normalized,
         )
@@ -120,20 +113,6 @@ class SwissDevJobsScraper(BaseJobScraper):
                 f"{feed_record.source_job_id}"
             )
 
-        company_identifiers = dict(
-            feed_record.normalized_job.company_identifiers
-        )
-        company_id = _optional_string(detail.get("companyId"))
-        if company_id:
-            company_identifiers["source_company_id"] = company_id
-
-        raw_location = _detail_location(detail)
-        salary_minimum, salary_maximum, salary_currency, salary_period = (
-            _salary_values(
-                detail,
-                feed_record.normalized_job.salary_raw,
-            )
-        )
         raw_payload = {
             "rss": feed_record.raw_payload,
             "detail": detail,
@@ -143,50 +122,23 @@ class SwissDevJobsScraper(BaseJobScraper):
             {
                 "title": _optional_string(detail.get("name"))
                 or feed_record.normalized_job.title,
-                "company_name": _optional_string(detail.get("company"))
-                or feed_record.normalized_job.company_name,
-                "company_identifiers": company_identifiers,
-                "company_website": _company_website(
-                    detail.get("companyWebsiteLink")
-                ),
-                "raw_location_text": raw_location,
-                "locations": [raw_location] if raw_location else [],
-                "country": _optional_string(detail.get("country")),
-                "region": _optional_string(detail.get("region")),
+                "company": _optional_string(detail.get("company"))
+                or feed_record.normalized_job.company,
+                "location": _detail_location(detail),
                 "employment_type": _optional_string(detail.get("jobType")),
-                "occupation": _optional_string(detail.get("techCategory"))
-                or _optional_string(detail.get("metaCategory")),
                 "seniority": _optional_string(detail.get("expLevel")),
-                "workplace_type": _workplace_type(
-                    detail.get("workplace")
+                "remote_type": _remote_type(detail.get("workplace")),
+                "required_languages": _string_list(
+                    detail.get("language")
                 ),
-                "salary_minimum": salary_minimum,
-                "salary_maximum": salary_maximum,
-                "salary_currency": salary_currency,
-                "salary_period": salary_period,
-                "required_skills": _string_list(
-                    detail.get("technologies")
-                ),
-                "languages": _string_list(detail.get("language")),
-                "benefits": _string_list(detail.get("perkKeys")),
-                "posted_at": _parse_date(
+                "posting_date": _parse_date(
                     _optional_string(detail.get("activeFrom"))
                 )
-                or feed_record.normalized_job.posted_at,
-                "expires_at": _parse_date(
-                    _optional_string(detail.get("expiresOn"))
-                ),
-                "updated_at": _parse_date(
-                    _optional_string(detail.get("updatedAt"))
-                ),
-                "parser_version": "swissdevjobs-detail-v2",
-                "raw_payload": raw_payload,
+                or feed_record.normalized_job.posting_date,
             }
         )
         normalized = NormalizedJob.model_validate(normalized_data)
         return SourceRecord(
-            source_name=self.source_name,
-            source_job_id=feed_record.source_job_id,
             raw_payload=raw_payload,
             normalized_job=normalized,
         )
@@ -291,55 +243,6 @@ def _detail_location(detail: dict[str, object]) -> str | None:
     ) or None
 
 
-def _salary_values(
-    detail: dict[str, object],
-    salary_raw: str | None,
-) -> tuple[int | float | None, int | float | None, str | None, str | None]:
-    parsed_minimum, parsed_maximum, currency, period = _parse_salary_text(
-        salary_raw
-    )
-    minimum = _number(detail.get("annualSalaryFrom"))
-    maximum = _number(detail.get("annualSalaryTo"))
-    return (
-        minimum if minimum is not None else parsed_minimum,
-        maximum if maximum is not None else parsed_maximum,
-        currency,
-        "YEAR" if minimum is not None or maximum is not None else period,
-    )
-
-
-def _parse_salary_text(
-    value: str | None,
-) -> tuple[int | None, int | None, str | None, str | None]:
-    if not value:
-        return None, None, None, None
-    match = re.search(
-        r"\b(?P<currency>[A-Z]{3})\s*"
-        r"(?P<minimum>[\d'’]+)"
-        r"(?:\s*[-–]\s*(?P<maximum>[\d'’]+))?",
-        value,
-    )
-    if not match:
-        return None, None, None, None
-    minimum = _integer_amount(match.group("minimum"))
-    maximum_text = match.group("maximum")
-    maximum = _integer_amount(maximum_text) if maximum_text else minimum
-    period = "YEAR" if re.search(r"\b(?:per\s+)?year\b", value, re.I) else None
-    return minimum, maximum, match.group("currency"), period
-
-
-def _integer_amount(value: str) -> int:
-    return int(value.replace("'", "").replace("’", ""))
-
-
-def _number(value: object) -> int | float | None:
-    return (
-        value
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-        else None
-    )
-
-
 def _string_list(value: object) -> list[str]:
     values = value if isinstance(value, list) else [value]
     result: list[str] = []
@@ -353,23 +256,12 @@ def _string_list(value: object) -> list[str]:
     return result
 
 
-def _company_website(value: object) -> str | None:
-    text = _optional_string(value)
-    if not text:
-        return None
-    if re.match(r"^https?://[^/]+", text, re.I):
-        return text
-    if re.match(r"^[^/\s]+\.[^/\s]+(?:/.*)?$", text):
-        return f"https://{text}"
-    return None
-
-
-def _workplace_type(value: object) -> WorkplaceType:
+def _remote_type(value: object) -> str | None:
     text = (_optional_string(value) or "").casefold()
     if text in {"remote", "fully remote", "home office"}:
-        return WorkplaceType.REMOTE
+        return "remote"
     if text in {"hybrid", "hybrid remote"}:
-        return WorkplaceType.HYBRID
+        return "hybrid"
     if text in {"office", "on-site", "onsite"}:
-        return WorkplaceType.ON_SITE
-    return WorkplaceType.UNKNOWN
+        return "on-site"
+    return None

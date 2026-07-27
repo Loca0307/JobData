@@ -71,39 +71,30 @@ def test_jobs_ch_scrapes_until_empty_without_filters_and_preserves_raw_payload()
     assert client.urls == list(pages)
     job = records[0].normalized_job
     assert job.title == "Senior Data Engineer"
-    assert job.company_name == "Example AG"
-    assert str(job.company_website) == "https://example.test/"
-    assert job.raw_location_text == "Example Street 1, 8000 Zürich, CH"
-    assert job.locations == ["Example Street 1, 8000 Zürich, CH"]
-    assert job.country == "CH"
-    assert job.region == "Zürich"
+    assert job.company == "Example AG"
+    assert job.location == "Example Street 1, 8000 Zürich, CH"
     assert job.description == (
         "Your role\nBuild reliable data platforms.\n"
         "Your profile\nFive years of Python experience."
     )
-    assert job.responsibilities == "Build reliable data platforms."
     assert job.requirements == "Five years of Python experience."
     assert job.employment_type == "Permanent position"
-    assert job.schedule == "32 hours/week"
-    assert job.occupation == "Data Engineering"
-    assert job.workplace_type == "remote"
-    assert job.salary_minimum == 120_000
-    assert job.salary_maximum == 140_000
-    assert job.salary_currency == "CHF"
-    assert job.salary_period == "YEAR"
-    assert job.salary_raw == "CHF 120000–140000 per year"
-    assert job.required_skills == ["Python", "AWS"]
-    assert job.benefits == ["Flexible hours", "Pension"]
+    assert job.remote_type == "remote"
+    assert job.salary == "CHF 120000–140000 per year"
+    assert job.required_languages == []
+    assert job.source_website == "jobs.ch"
+    assert job.external_id == "job-1"
     assert str(job.apply_url) == "https://example.test/jobs/job-1/apply"
-    assert job.posted_at.isoformat() == (
+    assert job.posting_date.isoformat() == (
         "2026-07-10T08:30:00+00:00"
     )
-    assert job.expires_at.isoformat() == "2026-08-10T08:30:00+00:00"
-    assert job.parser_version == "jobcloud-detail-v2"
     assert records[0].raw_payload["listing"]["extraEvidence"] == {
         "keep": True
     }
-    assert records[0].raw_payload["detail"]["json_ld"]["@type"] == "JobPosting"
+    detail = records[0].raw_payload["detail"]["json_ld"]
+    assert detail["@type"] == "JobPosting"
+    assert detail["skills"] == ["Python", "AWS"]
+    assert detail["jobBenefits"] == ["Flexible hours", "Pension"]
 
 
 def test_repeated_page_terminates_collection_without_emitting_duplicates():

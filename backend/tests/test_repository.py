@@ -18,32 +18,21 @@ from app.models.runs import RunStatus, ScrapeRun
 def make_record() -> SourceRecord:
     raw = {"id": "42", "score": 0.75}
     job = NormalizedJob(
-        source_name="jobs.ch",
-        source_job_id="42",
-        source_url="https://www.jobs.ch/en/vacancies/detail/42/",
         title="Data Engineer",
-        company_name="Example AG",
-        raw_location_text="8000 Zürich",
-        locations=["8000 Zürich"],
-        country="CH",
-        region="ZH",
+        company="Example AG",
+        location="8000 Zürich",
         description="Build and maintain data platforms.",
-        responsibilities="Build reliable pipelines.",
         requirements="Python and AWS experience.",
         employment_type="Full time",
-        salary_minimum=120_000,
-        salary_maximum=140_000,
-        salary_currency="CHF",
-        salary_period="YEAR",
-        salary_raw="CHF 120000–140000 per year",
-        required_skills=["Python", "AWS"],
-        parser_version="fixture-v1",
-        raw_payload=raw,
-        scraped_at=datetime(2026, 7, 24, tzinfo=UTC),
+        remote_type="hybrid",
+        salary="CHF 120000–140000 per year",
+        required_languages=["English"],
+        source_website="jobs.ch",
+        source_url="https://www.jobs.ch/en/vacancies/detail/42/",
+        external_id="42",
+        scrape_timestamp=datetime(2026, 7, 24, tzinfo=UTC),
     )
     return SourceRecord(
-        source_name="jobs.ch",
-        source_job_id="42",
         raw_payload=raw,
         normalized_job=job,
     )
@@ -81,19 +70,15 @@ def test_repository_creates_atomic_counter_updates_for_new_occurrence():
     stored = transaction[0]["Put"]["Item"]
     assert stored["raw_payload"]["M"]["score"]["N"] == "0.75"
     normalized = stored["normalized_job"]["M"]
+    assert "raw_payload" not in normalized
     assert normalized["title"]["S"] == "Data Engineer"
-    assert normalized["company_name"]["S"] == "Example AG"
-    assert normalized["locations"]["L"][0]["S"] == "8000 Zürich"
+    assert normalized["company"]["S"] == "Example AG"
+    assert normalized["location"]["S"] == "8000 Zürich"
     assert normalized["description"]["S"] == (
         "Build and maintain data platforms."
     )
-    assert normalized["salary_minimum"]["N"] == "120000"
-    assert normalized["salary_maximum"]["N"] == "140000"
-    assert normalized["salary_currency"]["S"] == "CHF"
-    assert [item["S"] for item in normalized["required_skills"]["L"]] == [
-        "Python",
-        "AWS",
-    ]
+    assert normalized["salary"]["S"] == "CHF 120000–140000 per year"
+    assert normalized["required_languages"]["L"][0]["S"] == "English"
     assert len(client.transaction_tokens[0]) == 36
 
 

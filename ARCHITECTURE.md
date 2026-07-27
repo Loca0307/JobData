@@ -17,11 +17,11 @@
   concrete jobs.ch and jobup.ch subclasses. It walks the public unfiltered
   listing pages in order until a valid empty or repeated page, then fetches the
   public detail page for every unseen source ID. Detail-page JobPosting JSON-LD
-  supplies descriptions, responsibilities and requirements where labeled,
-  company data, addresses, work terms, salary, skills, benefits, application
-  URL, and posting dates. Source-specific query parameters are preserved on
-  every page; jobs.ch keeps the required empty `term` value so its page number
-  is not redirected away.
+  supplies the compact normalized fields and retains descriptions,
+  responsibilities, requirements, company data, addresses, work terms, salary,
+  skills, benefits, application URL, and dates in the raw evidence.
+  Source-specific query parameters are preserved on every page; jobs.ch keeps
+  the required empty `term` value so its page number is not redirected away.
 - `backend/app/scrapers/swissdevjobs.py` fetches one RSS document, parses every
   item without keyword or location filters, strips tracking query parameters,
   and fetches each canonical public detail page. It combines RSS description
@@ -31,13 +31,17 @@
 - `backend/app/scrapers/http.py` supplies bounded redirects, connect/read
   timeouts, shared request spacing, and retry-after-aware transient retries.
   Fetch targets are fixed by the adapters.
-- `backend/app/models/jobs.py` is the canonical normalized contract. Unknown
-  values stay null, empty, or explicitly `unknown`; the raw adapter payload is
-  retained beside normalized fields for reprocessing.
+- `backend/app/models/jobs.py` uses the compact JobFinder-style normalized
+  contract: title, company, location, description, requirements, seniority,
+  employment/remote type, salary text, required languages, source URLs,
+  posting/scrape timestamps, and external ID. Unknown values stay null or
+  empty. `SourceRecord` contains only that normalized job and one raw payload;
+  source identity is read from the normalized job instead of being copied into
+  the wrapper.
 - `backend/app/scrapers/registry.py` makes source selection
-  configuration-driven. Every registered adapter is enabled by default and
-  `SCRAPER_ENABLED_SOURCES` can select a subset without any project-specific
-  authorization setting.
+  configuration-driven with one direct source-name-to-class mapping. Every
+  registered adapter is enabled by default and `SCRAPER_ENABLED_SOURCES` can
+  select a subset without any project-specific authorization setting.
 - Inputs are listing HTML, detail HTML, or RSS XML. Outputs are source
   occurrences; adapters never write to DynamoDB. Every record retains both its
   summary/feed payload and detail payload. HTTP, parser, identity mismatch,
@@ -65,6 +69,8 @@
   data, raw data, and content hash rather than creating duplicates.
 - Every occurrence item contains the complete canonical object under
   `normalized_job` and the lossless source evidence under `raw_payload`.
+  The raw payload is not duplicated inside `normalized_job`; source-specific
+  details that do not fit the compact model remain available in that raw map.
   Unpublished values remain null or empty; detail enrichment never fabricates
   salary, location, or other missing facts.
 - The owner-provisioned table needs only string partition key `PK` and sort key
@@ -95,9 +101,10 @@
   implemented.
 - `backend/tests/test_repository.py` and
   `backend/tests/test_ingestion.py` cover stable identity, content hashing,
-  atomic counters, idempotent sightings, reason-aware transaction retries,
-  partial failures, run summaries, and the no-enabled-source guard without
-  contacting AWS.
+  the compact persisted model shape, single raw-payload retention, atomic
+  counters, idempotent sightings, reason-aware transaction retries, partial
+  failures, run summaries, and the no-enabled-source guard without contacting
+  AWS.
 
 ## Operational and Aggregate API
 
@@ -107,9 +114,9 @@
   `/api/v1/readiness` with a table readiness check, and
   `/api/v1/stats/jobs` for total, per-source, and latest-run aggregates. It
   also exposes `POST /api/v1/ingestion/runs` to persist and schedule a run and
-  `GET /api/v1/ingestion/runs/{run_id}` to read its strongly consistent status.
-- `backend/app/api/dependencies.py` constructs the repository behind a FastAPI
-  dependency, keeping routes thin and replaceable in tests.
+  `GET /api/v1/ingestion/runs/{run_id}` to read its strongly consistent
+  status. The same small module constructs the cached repository dependency;
+  a separate one-function dependency module is unnecessary.
 - Inputs are GET requests plus the bodyless ingestion POST. Outputs are typed
   JSON responses; the POST returns `202 Accepted` with the running scrape-run
   ID before its in-process background task executes. DynamoDB or configuration
@@ -133,7 +140,8 @@
 - `frontend/components/job-overview.tsx` starts all configured sources from
   the “Run all scrapers” button, disables duplicate clicks while that run is
   active, polls its exact run ID every two seconds, and refreshes aggregates
-  when it reaches a terminal state.
+  when it reaches a terminal state. Initial loading and manual refresh reuse
+  the same request/state handler.
 - `frontend/app/layout.tsx`, `frontend/next.config.ts`,
   `frontend/tsconfig.json`, and `frontend/eslint.config.mjs` define the
   production Next.js shell and checks.

@@ -31,6 +31,9 @@ export function JobOverview() {
   const [isStartingRun, setIsStartingRun] = useState(false);
 
   const loadCounts = useCallback(async (signal?: AbortSignal) => {
+    if (signal?.aborted) {
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -53,31 +56,9 @@ export function JobOverview() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchJobCounts(controller.signal)
-      .then((result) => {
-        setCounts(result);
-        setError(null);
-      })
-      .catch((loadError: unknown) => {
-        if (
-          loadError instanceof DOMException &&
-          loadError.name === "AbortError"
-        ) {
-          return;
-        }
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "The stored-job totals could not be loaded.",
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      });
+    queueMicrotask(() => void loadCounts(controller.signal));
     return () => controller.abort();
-  }, []);
+  }, [loadCounts]);
 
   useEffect(() => {
     if (!activeRun || activeRun.status !== "running") {

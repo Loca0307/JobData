@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
-from app.api.dependencies import get_ingestion_repository
 from app.core.settings import get_settings
 from app.db.dynamodb import get_dynamodb_client
-from app.db.repositories import IngestionRepository
+from app.db.repositories import DynamoIngestionRepository, IngestionRepository
 from app.models.runs import JobCounts, ScrapeRun
 from app.scrapers.registry import get_all_source_names, get_configured_scrapers
 from app.services.ingestion import create_scrape_run, execute_scrape_run
 
 router = APIRouter(prefix="/api/v1")
+
+
+@lru_cache(maxsize=1)
+def get_ingestion_repository() -> DynamoIngestionRepository:
+    settings = get_settings()
+    _, table_name = settings.require_dynamodb()
+    return DynamoIngestionRepository(get_dynamodb_client(), table_name)
 
 
 @router.get("/health")

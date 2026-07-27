@@ -89,10 +89,16 @@ conditions under which the decision should be revisited.
 
 - **Choice:** Scrapers deduplicate only repeated IDs within their own source
   run and emit a lossless `SourceRecord` for every remaining occurrence.
-  Cross-source merging is intentionally deferred to a later service.
+  Use the compact JobFinder-style `NormalizedJob` fields and keep all
+  source-specific evidence in one raw payload. `SourceRecord` contains one
+  normalized job and one raw payload; its source identity is derived from the
+  normalized job rather than copied into both objects. Cross-source merging is
+  intentionally deferred to a later service.
 - **Why:** Similar titles, companies, and locations are not sufficient proof
   that two postings are identical. Keeping each source occurrence preserves
-  provenance and supports future reprocessing.
+  provenance and supports future reprocessing. A single identity and raw-data
+  location avoids inconsistent duplicate fields and reduces every DynamoDB
+  occurrence without losing information.
 - **Relevant files:** `backend/app/models/jobs.py`,
   `backend/app/scrapers/jobcloud.py`, and
   `backend/app/scrapers/swissdevjobs.py`
@@ -104,8 +110,22 @@ conditions under which the decision should be revisited.
     model.
   - No within-source deduplication preserves literal responses, but pagination
     overlap would produce uncontrolled duplicates during one scrape.
+  - Copying source identity and raw payload into both models makes each object
+    independently inspectable, but wastes storage and permits contradictory
+    values.
+  - A wide typed field for every possible source attribute makes individual
+    facts easier to query, but most fields remain empty, scraper code becomes
+    mapping-heavy, and each new source-specific concept expands the shared
+    contract.
+- **Constraints and risks:** The compact normalized map is intentionally not a
+  complete typed projection of every publisher field. Technologies, benefits,
+  structured salary components, expiry dates, company identifiers, and similar
+  evidence remain in `raw_payload` and require source-aware reprocessing when
+  needed.
 - **Revisit when:** The persistence and deduplication services define durable
-  occurrence keys, content hashes, and merge/unmerge behavior.
+  occurrence keys, content hashes, and merge/unmerge behavior, or a concrete
+  analysis requires an additional field to be promoted into the normalized
+  model.
 
 ## 5. Public Structured Surfaces with Fail-Loud Parsing
 
@@ -149,7 +169,9 @@ conditions under which the decision should be revisited.
 
 - **Choice:** Use a deterministic hash of source name and source job ID as the
   current internal job ID, and store one lossless source occurrence per item in
-  an owner-provisioned DynamoDB table with string `PK` and `SK` keys.
+  an owner-provisioned DynamoDB table with string `PK` and `SK` keys. Store
+  canonical fields once in `normalized_job` and source evidence once in
+  `raw_payload`.
 - **Why:** The current phase has reliable source identities but no calibrated
   cross-source deduplication rules. Source-scoped identity makes ingestion
   idempotent without guessing that similar ads are the same vacancy.
@@ -205,7 +227,9 @@ conditions under which the decision should be revisited.
 
 - **Choice:** Put all DynamoDB access behind FastAPI and let a small Next.js
   client fetch aggregate/run status and request ingestion through typed API
-  endpoints.
+  endpoints. Keep the cached repository dependency directly in
+  `backend/app/api/routes.py`, and reuse one frontend count-loading function
+  for initial load and manual refresh.
 - **Why:** It keeps AWS credentials out of the browser and maintains the
   repository/service boundaries required by this data platform.
 - **Relevant files:** `backend/app/api/`, `frontend/app/`,
@@ -220,6 +244,8 @@ conditions under which the decision should be revisited.
     runtime.
   - A charting library could add visuals, but three scalar counts do not
     justify another dependency.
+  - A separate API dependency module is useful when many dependency providers
+    exist, but one repository constructor does not justify another layer.
 - **Constraints and risks:** The dashboard is a private operational shell and
   has no authentication yet. It should only be exposed inside an appropriately
   controlled environment.
