@@ -7,8 +7,10 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
+from bs4 import BeautifulSoup
+
 from app.core.settings import Settings, get_settings
-from app.models.jobs import NormalizedJob, SourceRecord
+from app.models.jobs import NormalizedJob, SourceRecord, WorkplaceType
 from app.scrapers.base import BaseJobScraper, ScrapeError
 from app.scrapers.http import RequestRateLimiter, ScraperHttpClient
 
@@ -20,6 +22,7 @@ class JobCloudScraper(BaseJobScraper):
     base_url: str
     listing_path: str
     detail_path: str
+    listing_query: tuple[tuple[str, str], ...] = ()
 
     def __init__(
         self,
@@ -51,7 +54,10 @@ class JobCloudScraper(BaseJobScraper):
                     return
                 for record in new_records:
                     seen_ids.add(record.source_job_id)
-                    yield record
+                    detail_html = client.get_text(
+                        str(record.normalized_job.source_url)
+                    )
+                    yield self._parse_detail(detail_html, record)
             raise ScrapeError(
                 f"{self.source_name} reached SCRAPER_MAX_PAGES="
                 f"{self.settings.scraper_max_pages} before exhaustion"
@@ -60,7 +66,10 @@ class JobCloudScraper(BaseJobScraper):
     def _listing_url(self, page: int) -> str:
         if page < 1:
             raise ValueError("page must be at least 1")
-        query = "" if page == 1 else f"?{urlencode({'page': page})}"
+        query_params: dict[str, str | int] = dict(self.listing_query)
+        if page > 1:
+            query_params["page"] = page
+        query = f"?{urlencode(query_params)}" if query_params else ""
         return f"{self.base_url}{self.listing_path}{query}"
 
     def _parse_listing(self, html: str) -> list[SourceRecord]:
@@ -108,7 +117,9 @@ class JobCloudScraper(BaseJobScraper):
             company_name=str(company_name) if company_name else None,
             raw_location_text=_optional_string(summary.get("place")),
             employment_type=_optional_string(summary.get("employmentType")),
-            posted_at=_parse_datetime(summary.get("publicationDate")),
+            posted_at=_parse_datetime(summary.get("initialPublicationDate"))
+            or _parse_datetime(summary.get("publicationDate")),
+            updated_at=_parse_datetime(summary.get("publicationDate")),
             parser_version=self.parser_version,
             raw_payload=summary,
         )
@@ -119,12 +130,170 @@ class JobCloudScraper(BaseJobScraper):
             normalized_job=normalized,
         )
 
+    def _parse_detail(
+        self,
+        html: str,
+        listing_record: SourceRecord,
+    ) -> SourceRecord:
+        detail = _job_posting_json_ld(html)
+        detail_id = _property_value(detail.get("identifier"), "value")
+        if detail_id and str(detail_id) != listing_record.source_job_id:
+            raise ScrapeError(
+                f"{self.source_name} detail identifier does not match "
+                f"{listing_record.source_job_id}"
+            )
+
+        listing = listing_record.raw_payload
+        organization = _mapping(detail.get("hiringOrganization"))
+        company = _mapping(listing.get("company"))
+        company_identifiers = dict(
+            listing_record.normalized_job.company_identifiers
+        )
+        if company.get("id"):
+            company_identifiers["source_company_id"] = str(company["id"])
+        if company.get("slug"):
+            company_identifiers["source_company_slug"] = str(company["slug"])
+
+        addresses = _job_addresses(detail.get("jobLocation"))
+        locations = _unique_strings(
+            _format_address(address) for address in addresses
+        )
+        listing_locations = _listing_locations(listing.get("locations"))
+        locations = _merge_locations(locations, listing_locations)
+        raw_location_text = (
+            "; ".join(locations)
+            or listing_record.normalized_job.raw_location_text
+        )
+        country = _first_address_value(addresses, "addressCountry")
+        if not country:
+            country = _property_value(
+                detail.get("applicantLocationRequirements"),
+                "name",
+            )
+        region = _first_listing_value(
+            listing.get("locations"),
+            "cantonCode",
+        ) or _first_address_value(addresses, "addressRegion")
+        if not region:
+            regions = _string_list(listing.get("regions"))
+            region = regions[0] if regions else None
+
+        salary_minimum, salary_maximum, salary_currency, salary_period = (
+            _salary(detail.get("baseSalary"))
+        )
+        salary_raw = _salary_text(
+            salary_minimum,
+            salary_maximum,
+            salary_currency,
+            salary_period,
+        )
+        description_html = _optional_string(detail.get("description"))
+        description = _html_text(description_html)
+        responsibilities = _joined_string(
+            detail.get("responsibilities")
+        ) or _description_section(description_html, "responsibilities")
+        requirements = _joined_string(
+            detail.get("qualifications")
+        ) or _description_section(description_html, "requirements")
+        employment_type = _joined_string(detail.get("employmentType"))
+        schedule = _schedule_text(detail.get("workHours"))
+        if not schedule:
+            schedule = _employment_grade_text(listing.get("employmentGrades"))
+
+        category = detail.get("occupationalCategory")
+        occupation = (
+            _property_value(category, "name")
+            if isinstance(category, dict)
+            else _optional_string(category)
+        )
+        skills = _string_list(detail.get("skills"))
+        benefits = _unique_strings(
+            [
+                *_string_list(detail.get("jobBenefits")),
+                *_string_list(listing.get("benefits")),
+            ]
+        )
+        languages = _string_list(
+            listing.get("languageSkills"),
+            dict_keys=("name", "language", "languageCode", "label"),
+        )
+        workplace_type = _workplace_type(detail.get("jobLocationType"))
+        fallback_apply_url = listing_record.normalized_job.apply_url
+        apply_url = _apply_url(detail) or (
+            str(fallback_apply_url) if fallback_apply_url else None
+        )
+        company_website = _valid_http_url(organization.get("sameAs"))
+
+        raw_payload = {
+            "listing": listing,
+            "detail": {
+                "json_ld": detail,
+            },
+        }
+        normalized_data = listing_record.normalized_job.model_dump()
+        normalized_data.update(
+            {
+                "apply_url": apply_url,
+                "title": _optional_string(detail.get("title"))
+                or listing_record.normalized_job.title,
+                "company_name": listing_record.normalized_job.company_name
+                or _optional_string(organization.get("name")),
+                "company_identifiers": company_identifiers,
+                "company_website": company_website,
+                "raw_location_text": raw_location_text,
+                "locations": locations,
+                "country": country,
+                "region": region,
+                "description": description,
+                "responsibilities": responsibilities,
+                "requirements": requirements,
+                "employment_type": employment_type
+                or listing_record.normalized_job.employment_type,
+                "schedule": schedule,
+                "occupation": occupation,
+                "workplace_type": workplace_type,
+                "salary_minimum": salary_minimum,
+                "salary_maximum": salary_maximum,
+                "salary_currency": salary_currency,
+                "salary_period": salary_period,
+                "salary_raw": salary_raw,
+                "required_skills": skills,
+                "education": _string_list(
+                    detail.get("educationRequirements")
+                ),
+                "experience": _string_list(
+                    detail.get("experienceRequirements")
+                ),
+                "languages": languages,
+                "benefits": benefits,
+                "posted_at": _parse_datetime(
+                    listing.get("initialPublicationDate")
+                )
+                or _parse_datetime(detail.get("datePosted"))
+                or listing_record.normalized_job.posted_at,
+                "updated_at": _parse_datetime(
+                    listing.get("publicationDate")
+                ),
+                "expires_at": _parse_datetime(detail.get("validThrough")),
+                "parser_version": "jobcloud-detail-v2",
+                "raw_payload": raw_payload,
+            }
+        )
+        normalized = NormalizedJob.model_validate(normalized_data)
+        return SourceRecord(
+            source_name=self.source_name,
+            source_job_id=listing_record.source_job_id,
+            raw_payload=raw_payload,
+            normalized_job=normalized,
+        )
+
 
 class JobsChScraper(JobCloudScraper):
     source_name = "jobs.ch"
     base_url = "https://www.jobs.ch"
     listing_path = "/en/vacancies/"
     detail_path = "/en/vacancies/detail/"
+    listing_query = (("term", ""),)
 
 
 class JobupChScraper(JobCloudScraper):
@@ -145,3 +314,396 @@ def _parse_datetime(value: object) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _job_posting_json_ld(html: str) -> dict[str, Any]:
+    soup = BeautifulSoup(html, "html.parser")
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            value = json.loads(script.string or script.get_text())
+        except (json.JSONDecodeError, TypeError):
+            continue
+        candidates = value if isinstance(value, list) else [value]
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            graph = candidate.get("@graph")
+            graph_candidates = graph if isinstance(graph, list) else [candidate]
+            for graph_candidate in graph_candidates:
+                if not isinstance(graph_candidate, dict):
+                    continue
+                schema_type = graph_candidate.get("@type")
+                schema_types = (
+                    schema_type
+                    if isinstance(schema_type, list)
+                    else [schema_type]
+                )
+                if "JobPosting" in schema_types:
+                    return graph_candidate
+    raise ScrapeError("JobCloud detail JobPosting JSON-LD is missing")
+
+
+def _mapping(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _property_value(value: object, key: str) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    return _optional_string(value.get(key))
+
+
+def _job_addresses(value: object) -> list[dict[str, Any]]:
+    locations = value if isinstance(value, list) else [value]
+    return [
+        address
+        for location in locations
+        if isinstance(location, dict)
+        and isinstance((address := location.get("address")), dict)
+    ]
+
+
+def _format_address(address: dict[str, Any]) -> str | None:
+    street = _optional_string(address.get("streetAddress"))
+    postal_code = _optional_string(address.get("postalCode"))
+    locality = _optional_string(address.get("addressLocality"))
+    region = _optional_string(address.get("addressRegion"))
+    country = _optional_string(address.get("addressCountry"))
+    postal_locality = " ".join(
+        part for part in (postal_code, locality or region) if part
+    )
+    distinct_region = region if locality and region != locality else None
+    return ", ".join(
+        part
+        for part in (street, postal_locality, distinct_region, country)
+        if part
+    ) or None
+
+
+def _listing_locations(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return _unique_strings(
+        _format_address(
+            {
+                "streetAddress": location.get("street"),
+                "postalCode": location.get("postalCode"),
+                "addressLocality": location.get("city")
+                or location.get("place"),
+                "addressRegion": location.get("cantonCode"),
+                "addressCountry": location.get("countryCode"),
+            }
+        )
+        for location in value
+        if isinstance(location, dict)
+    )
+
+
+def _merge_locations(
+    detailed_locations: list[str],
+    listing_locations: list[str],
+) -> list[str]:
+    result = _unique_strings(detailed_locations)
+    for location in listing_locations:
+        location_key = location.casefold()
+        if any(
+            location_key in detailed_location.casefold()
+            for detailed_location in result
+        ):
+            continue
+        result.append(location)
+    return result
+
+
+def _first_address_value(
+    addresses: list[dict[str, Any]],
+    key: str,
+) -> str | None:
+    return next(
+        (
+            value
+            for address in addresses
+            if (value := _optional_string(address.get(key)))
+        ),
+        None,
+    )
+
+
+def _first_listing_value(value: object, key: str) -> str | None:
+    if not isinstance(value, list):
+        return None
+    return next(
+        (
+            item_value
+            for item in value
+            if isinstance(item, dict)
+            and (item_value := _optional_string(item.get(key)))
+        ),
+        None,
+    )
+
+
+def _salary(
+    value: object,
+) -> tuple[int | float | None, int | float | None, str | None, str | None]:
+    salary = _mapping(value)
+    quantitative = _mapping(salary.get("value"))
+    exact = _number(quantitative.get("value"))
+    minimum = _number(quantitative.get("minValue"))
+    maximum = _number(quantitative.get("maxValue"))
+    if exact is not None:
+        minimum = minimum if minimum is not None else exact
+        maximum = maximum if maximum is not None else exact
+    currency = _optional_string(salary.get("currency"))
+    period = _optional_string(quantitative.get("unitText"))
+    return minimum, maximum, currency, period
+
+
+def _number(value: object) -> int | float | None:
+    return (
+        value
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+        else None
+    )
+
+
+def _salary_text(
+    minimum: int | float | None,
+    maximum: int | float | None,
+    currency: str | None,
+    period: str | None,
+) -> str | None:
+    if minimum is None and maximum is None:
+        return None
+    amount = (
+        f"{minimum:g}–{maximum:g}"
+        if minimum is not None
+        and maximum is not None
+        and minimum != maximum
+        else f"{minimum if minimum is not None else maximum:g}"
+    )
+    prefix = f"{currency} " if currency else ""
+    suffix = f" per {period.lower()}" if period else ""
+    return f"{prefix}{amount}{suffix}"
+
+
+def _html_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = BeautifulSoup(value, "html.parser").get_text("\n", strip=True)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return "\n".join(lines) or None
+
+
+_SECTION_LABELS = {
+    "responsibilities": {
+        "responsibilities",
+        "tasks",
+        "your responsibilities",
+        "your role",
+        "your tasks",
+        "your mission",
+        "aufgaben",
+        "deine aufgaben",
+        "deine rolle bei uns",
+        "ihr wirkungsbereich",
+        "ihre aufgaben",
+        "mission",
+        "missions",
+        "responsabilites",
+        "responsabilités",
+        "vos missions",
+        "votre mission",
+        "compiti",
+        "il tuo ruolo",
+        "mansioni",
+        "responsabilita",
+        "responsabilità",
+    },
+    "requirements": {
+        "about you",
+        "qualifications",
+        "requirements",
+        "skills",
+        "what you bring",
+        "your profile",
+        "anforderungen",
+        "das bringen sie mit",
+        "das bringst du mit",
+        "dein profil",
+        "ihr profil",
+        "profil",
+        "qualifikationen",
+        "competences",
+        "compétences",
+        "exigences",
+        "profil recherche",
+        "profil recherché",
+        "votre profil",
+        "competenze",
+        "il tuo profilo",
+        "profilo",
+        "requisiti",
+    },
+}
+
+
+def _description_section(
+    description_html: str | None,
+    section: str,
+) -> str | None:
+    if not description_html:
+        return None
+    soup = BeautifulSoup(description_html, "html.parser")
+    labels = _SECTION_LABELS[section]
+    for heading in soup.find_all(
+        ["h1", "h2", "h3", "h4", "h5", "h6", "strong", "b"]
+    ):
+        if _normalized_heading(heading.get_text(" ", strip=True)) not in labels:
+            continue
+        anchor = heading
+        if (
+            heading.name in {"strong", "b"}
+            and heading.parent
+            and heading.parent.name in {"p", "div"}
+            and heading.parent.get_text(" ", strip=True)
+            == heading.get_text(" ", strip=True)
+        ):
+            anchor = heading.parent
+        parts: list[str] = []
+        for sibling in anchor.next_siblings:
+            if _starts_description_section(sibling):
+                break
+            if not hasattr(sibling, "get_text"):
+                text = str(sibling).strip()
+            else:
+                text = sibling.get_text(" ", strip=True)
+            if text:
+                parts.append(text)
+        return "\n".join(parts) or None
+    return None
+
+
+def _starts_description_section(value: object) -> bool:
+    name = getattr(value, "name", None)
+    if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+        return True
+    candidates = []
+    if name in {"strong", "b"}:
+        candidates.append(value)
+    elif hasattr(value, "find_all"):
+        candidates.extend(value.find_all(["strong", "b"], recursive=False))
+    labels = set().union(*_SECTION_LABELS.values())
+    return any(
+        _normalized_heading(candidate.get_text(" ", strip=True)) in labels
+        for candidate in candidates
+    )
+
+
+def _normalized_heading(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip(" :.-").casefold()
+
+
+def _joined_string(value: object) -> str | None:
+    if isinstance(value, list):
+        values = _unique_strings(_optional_string(item) for item in value)
+        return ", ".join(values) or None
+    return _optional_string(value)
+
+
+def _string_list(
+    value: object,
+    *,
+    dict_keys: tuple[str, ...] = ("name", "value", "label"),
+) -> list[str]:
+    values = value if isinstance(value, list) else [value]
+    strings: list[str | None] = []
+    for item in values:
+        if isinstance(item, dict):
+            strings.append(
+                next(
+                    (
+                        text
+                        for key in dict_keys
+                        if (text := _optional_string(item.get(key)))
+                    ),
+                    None,
+                )
+            )
+        else:
+            strings.append(_optional_string(item))
+    return _unique_strings(strings)
+
+
+def _unique_strings(values: Any) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not value:
+            continue
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
+
+
+def _employment_grade_text(value: object) -> str | None:
+    if not isinstance(value, list):
+        return None
+    grades = sorted({
+        grade
+        for grade in value
+        if isinstance(grade, (int, float)) and not isinstance(grade, bool)
+    })
+    if not grades:
+        return None
+    if len(grades) == 1:
+        return f"{grades[0]:g}%"
+    return f"{min(grades):g}–{max(grades):g}%"
+
+
+def _schedule_text(value: object) -> str | None:
+    text = _optional_string(value)
+    if not text:
+        return None
+    return re.sub(
+        r"^(\d+(?:\.\d+)?)\s*-\s*\1(\s+hours?/week)$",
+        r"\1\2",
+        text,
+        flags=re.I,
+    )
+
+
+def _workplace_type(value: object) -> WorkplaceType:
+    values = value if isinstance(value, list) else [value]
+    normalized = {
+        str(item).strip().casefold()
+        for item in values
+        if item not in (None, "")
+    }
+    if normalized & {"telecommute", "remote"}:
+        return WorkplaceType.REMOTE
+    return WorkplaceType.UNKNOWN
+
+
+def _apply_url(detail: dict[str, Any]) -> str | None:
+    action = _mapping(detail.get("potentialAction"))
+    target = action.get("target")
+    targets = target if isinstance(target, list) else [target]
+    for candidate in targets:
+        if isinstance(candidate, dict):
+            url = _valid_http_url(candidate.get("urlTemplate"))
+            if url:
+                return url
+        else:
+            url = _valid_http_url(candidate)
+            if url:
+                return url
+    return None
+
+
+def _valid_http_url(value: object) -> str | None:
+    text = _optional_string(value)
+    return text if text and re.match(r"^https?://[^/]+", text, re.I) else None

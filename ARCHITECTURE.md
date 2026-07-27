@@ -15,12 +15,19 @@
   `SourceRecord` values and keeps persistence outside source code.
 - `backend/app/scrapers/jobcloud.py` contains one JobCloud implementation with
   concrete jobs.ch and jobup.ch subclasses. It walks the public unfiltered
-  listing pages in order until a valid empty or repeated page, emits each
-  source ID once, and raises `ScrapeError` for malformed state or a page-limit
-  circuit break.
+  listing pages in order until a valid empty or repeated page, then fetches the
+  public detail page for every unseen source ID. Detail-page JobPosting JSON-LD
+  supplies descriptions, responsibilities and requirements where labeled,
+  company data, addresses, work terms, salary, skills, benefits, application
+  URL, and posting dates. Source-specific query parameters are preserved on
+  every page; jobs.ch keeps the required empty `term` value so its page number
+  is not redirected away.
 - `backend/app/scrapers/swissdevjobs.py` fetches one RSS document, parses every
   item without keyword or location filters, strips tracking query parameters,
-  extracts labeled description sections, and retains the RSS fields.
+  and fetches each canonical public detail page. It combines RSS description
+  sections and salary evidence with the detail page's address, work terms,
+  seniority, annual salary bounds, technology stack, company metadata, and
+  dates.
 - `backend/app/scrapers/http.py` supplies bounded redirects, connect/read
   timeouts, shared request spacing, and retry-after-aware transient retries.
   Fetch targets are fixed by the adapters.
@@ -31,15 +38,20 @@
   configuration-driven. Every registered adapter is enabled by default and
   `SCRAPER_ENABLED_SOURCES` can select a subset without any project-specific
   authorization setting.
-- Inputs are listing HTML or RSS XML. Outputs are source occurrences; adapters
-  never write to DynamoDB. HTTP, parser, schema, and safety-limit failures stop
-  that source instead of producing a false empty result.
+- Inputs are listing HTML, detail HTML, or RSS XML. Outputs are source
+  occurrences; adapters never write to DynamoDB. Every record retains both its
+  summary/feed payload and detail payload. HTTP, parser, identity mismatch,
+  schema, and safety-limit failures stop that source instead of producing a
+  false empty result.
 - `backend/tests/test_jobcloud.py`,
   `backend/tests/test_swissdevjobs.py`, `backend/tests/test_http.py`, and
   `backend/tests/test_registry.py` cover pagination, repetition, malformed
-  inputs, raw retention, transient retries, rate limiting, registry contracts,
-  and enabled-source selection using sanitized fixtures in
-  `backend/tests/fixtures/`.
+  inputs, detail identity checks, normalized enrichment, source-specific query
+  parameters, raw retention, transient retries, rate limiting, registry
+  contracts, and enabled-source selection using sanitized fixtures in
+  `backend/tests/fixtures/jobcloud_detail.html`,
+  `backend/tests/fixtures/swissdevjobs_detail.html`, and the other fixture
+  files in `backend/tests/fixtures/`.
 
 ## DynamoDB Ingestion and Scrape Runs
 
@@ -51,6 +63,10 @@
   occurrence receives a deterministic ID derived from source name and source
   job ID. Existing occurrences update their last-seen time, run ID, normalized
   data, raw data, and content hash rather than creating duplicates.
+- Every occurrence item contains the complete canonical object under
+  `normalized_job` and the lossless source evidence under `raw_payload`.
+  Unpublished values remain null or empty; detail enrichment never fabricates
+  salary, location, or other missing facts.
 - The owner-provisioned table needs only string partition key `PK` and sort key
   `SK`. Job occurrences use `JOB#<stable-id>` /
   `SOURCE#<source>#<source-id>`; scrape runs use `RUN#<run-id>` / `META` plus
@@ -59,6 +75,11 @@
   transaction. Count items use `STATS` / `TOTAL` and
   `STATS` / `SOURCE#<source>`. The latest completed run is stored at
   `STATS` / `LATEST_RUN`, so API reads use a bounded batch get and never scan.
+- Each new-occurrence transaction has a deterministic request token for safe
+  retries. `backend/app/db/repositories.py` distinguishes a conditional
+  duplicate race from a shared-counter `TransactionConflict`: duplicate races
+  update the winning item, conflicts receive at most five exponential-backoff
+  retries with jitter, and unknown cancellations fail the source.
 - `backend/app/db/dynamodb.py` uses the normal AWS credential chain and reads
   region, table, and optional local endpoint settings. It never creates or
   changes the table.
@@ -74,8 +95,9 @@
   implemented.
 - `backend/tests/test_repository.py` and
   `backend/tests/test_ingestion.py` cover stable identity, content hashing,
-  atomic counters, idempotent sightings, partial failures, run summaries, and
-  the no-enabled-source guard without contacting AWS.
+  atomic counters, idempotent sightings, reason-aware transaction retries,
+  partial failures, run summaries, and the no-enabled-source guard without
+  contacting AWS.
 
 ## Operational and Aggregate API
 

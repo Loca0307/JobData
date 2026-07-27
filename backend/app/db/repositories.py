@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
+import time
 from datetime import UTC
 from decimal import Decimal
 from typing import Any, Protocol
@@ -14,6 +16,8 @@ from app.models.runs import JobCounts, ScrapeRun, SourceRunResult
 
 _serializer = TypeSerializer()
 _deserializer = TypeDeserializer()
+_TRANSACTION_MAX_RETRIES = 5
+_TRANSACTION_RETRY_BASE_SECONDS = 0.05
 
 
 class IngestionRepository(Protocol):
@@ -114,45 +118,58 @@ class DynamoIngestionRepository:
             "normalized_job": normalized,
             "raw_payload": raw_payload,
         }
-        try:
-            self._client.transact_write_items(
-                TransactItems=[
-                    {
-                        "Put": {
-                            "TableName": self._table_name,
-                            "Item": _serialize_item(item),
-                            "ConditionExpression": "attribute_not_exists(PK)",
-                        }
-                    },
-                    _counter_update(self._table_name, "TOTAL"),
-                    _counter_update(
-                        self._table_name, f"SOURCE#{record.source_name}"
-                    ),
-                ]
-            )
-            return True
-        except ClientError as exc:
-            if not _is_transaction_condition_failure(exc):
-                raise
+        transaction_items = [
+            {
+                "Put": {
+                    "TableName": self._table_name,
+                    "Item": _serialize_item(item),
+                    "ConditionExpression": "attribute_not_exists(PK)",
+                }
+            },
+            _counter_update(self._table_name, "TOTAL"),
+            _counter_update(
+                self._table_name, f"SOURCE#{record.source_name}"
+            ),
+        ]
+        client_request_token = hashlib.sha256(
+            f"{run_id}\0{record.source_name}\0{record.source_job_id}".encode()
+        ).hexdigest()[:36]
+        for attempt in range(_TRANSACTION_MAX_RETRIES + 1):
             try:
-                self._client.update_item(
-                    TableName=self._table_name,
-                    Key=_serialize_item(key),
-                    ConditionExpression="attribute_exists(PK)",
-                    UpdateExpression=(
-                        "SET last_seen_at = :last_seen_at, "
-                        "last_run_id = :last_run_id, "
-                        "content_hash = :content_hash, "
-                        "normalized_job = :normalized, "
-                        "raw_payload = :raw_payload"
-                    ),
-                    ExpressionAttributeValues=values,
+                self._client.transact_write_items(
+                    TransactItems=transaction_items,
+                    ClientRequestToken=client_request_token,
                 )
-            except ClientError as update_exc:
-                if _is_conditional_failure(update_exc):
-                    raise exc from update_exc
-                raise
-            return False
+                return True
+            except ClientError as exc:
+                if _is_transaction_condition_failure(exc):
+                    try:
+                        self._client.update_item(
+                            TableName=self._table_name,
+                            Key=_serialize_item(key),
+                            ConditionExpression="attribute_exists(PK)",
+                            UpdateExpression=(
+                                "SET last_seen_at = :last_seen_at, "
+                                "last_run_id = :last_run_id, "
+                                "content_hash = :content_hash, "
+                                "normalized_job = :normalized, "
+                                "raw_payload = :raw_payload"
+                            ),
+                            ExpressionAttributeValues=values,
+                        )
+                    except ClientError as update_exc:
+                        if _is_conditional_failure(update_exc):
+                            raise exc from update_exc
+                        raise
+                    return False
+                if (
+                    not _is_transaction_conflict(exc)
+                    or attempt == _TRANSACTION_MAX_RETRIES
+                ):
+                    raise
+                backoff = _TRANSACTION_RETRY_BASE_SECONDS * (2**attempt)
+                time.sleep(backoff + random.uniform(0, backoff))
+        raise AssertionError("transaction retry loop terminated unexpectedly")
 
     def finish_run(self, run: ScrapeRun) -> None:
         run_payload = run.model_dump(mode="json")
@@ -334,6 +351,27 @@ def _is_conditional_failure(exc: ClientError) -> bool:
 
 
 def _is_transaction_condition_failure(exc: ClientError) -> bool:
-    return exc.response.get("Error", {}).get("Code") == (
-        "TransactionCanceledException"
+    return (
+        exc.response.get("Error", {}).get("Code")
+        == "TransactionCanceledException"
+        and "ConditionalCheckFailed" in _transaction_cancellation_codes(exc)
     )
+
+
+def _is_transaction_conflict(exc: ClientError) -> bool:
+    error_code = exc.response.get("Error", {}).get("Code")
+    return error_code == "TransactionConflictException" or (
+        error_code == "TransactionCanceledException"
+        and "TransactionConflict" in _transaction_cancellation_codes(exc)
+    )
+
+
+def _transaction_cancellation_codes(exc: ClientError) -> set[str]:
+    reasons = exc.response.get("CancellationReasons", [])
+    return {
+        reason["Code"]
+        for reason in reasons
+        if isinstance(reason, dict)
+        and isinstance(reason.get("Code"), str)
+        and reason["Code"] != "None"
+    }

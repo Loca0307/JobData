@@ -41,16 +41,20 @@ conditions under which the decision should be revisited.
 - **Revisit when:** A dependable ingestion pipeline and representative dataset
   exist and the owner defines the first analysis workflow.
 
-## 3. Unfiltered Exhaustion-Based Source Collection
+## 3. Unfiltered Exhaustion-Based Collection with Detail Enrichment
 
 - **Choice:** Collect JobCloud boards from their unfiltered listing page in
   ascending page order until a valid empty page or a page with no unseen source
   IDs is reached. Collect the full SwissDevJobs RSS feed without local
-  filtering.
+  filtering. For every emitted ID, fetch its public detail page through the
+  same rate-limited HTTP client before persistence.
 - **Why:** Fixed page counts and user-profile filters from JobFinder would make
   market analysis systematically incomplete. Sequential pagination also
   avoids guessing a total before the source has been inspected and makes the
-  exact stopping evidence observable.
+  exact stopping evidence observable. Listing cards and RSS entries are not
+  rich enough for analysis; the detail surfaces provide full descriptions,
+  addresses, salary evidence, work terms, skills, seniority, benefits, and
+  company metadata while the original summary remains available.
 - **Relevant files:** `backend/app/scrapers/jobcloud.py`,
   `backend/app/scrapers/swissdevjobs.py`,
   `backend/tests/test_jobcloud.py`, and
@@ -64,10 +68,19 @@ conditions under which the decision should be revisited.
   - Location or keyword partitions could improve recoverability for very large
     sources, but overlapping partitions increase deduplication complexity and
     are unnecessary while the unfiltered listing surface remains enumerable.
+  - Persisting listing summaries only is substantially faster, but leaves most
+    canonical fields empty and does not satisfy analysis requirements.
+  - Fetching detail pages concurrently would reduce elapsed time, but produces
+    burstier source traffic and complicates the current source-level throttle.
 - **Constraints and risks:** A configurable `SCRAPER_MAX_PAGES` remains as a
   circuit breaker. Reaching it fails the run; it does not produce a false
   completeness claim. A repeated page is treated as exhaustion because some
-  sites redirect out-of-range pages back to the last available page.
+  sites redirect out-of-range pages back to the last available page. Query
+  construction remains source-aware: jobs.ch requires `term=` even for an
+  unfiltered request, because it redirects a page-only query back to page one.
+  Detail enrichment adds one request per job and therefore makes a complete run
+  materially longer. Missing structured fields stay null; raw detail evidence
+  is retained for later reprocessing.
 - **Revisit when:** A source publishes a supported bulk API/feed, listing
   pagination becomes unstable, a single run exceeds the acceptable recovery
   window, or reliable total-page metadata is exposed.
@@ -97,14 +110,16 @@ conditions under which the decision should be revisited.
 ## 5. Public Structured Surfaces with Fail-Loud Parsing
 
 - **Choice:** Implement parsers for the public JobCloud page state used by the
-  existing JobFinder implementation and the SwissDevJobs RSS surface. Enable
-  registered adapters by default without project-specific authorization flags.
-  Do not use browser automation, private APIs, login state, or
+  existing JobFinder implementation, JobCloud JobPosting JSON-LD, the
+  SwissDevJobs RSS surface, and its embedded public detail record. Enable
+  registered adapters by default without project-specific authorization
+  flags. Do not use browser automation, private APIs, login state, or
   controls-bypassing techniques.
 - **Why:** These surfaces are simpler, lower-load, and easier to test than
   browser-driven scraping. Removing redundant application flags makes the
   configured scraper command run immediately, while strict shape validation
-  prevents a source redesign from being recorded as zero available jobs.
+  and summary/detail identity checks prevent a source redesign or redirect from
+  being recorded as a valid job.
 - **Relevant files:** `backend/app/scrapers/http.py`,
   `backend/app/scrapers/registry.py`, `backend/app/core/settings.py`,
   `backend/app/scrapers/jobcloud.py`, and
@@ -117,14 +132,15 @@ conditions under which the decision should be revisited.
     and is unnecessary for the current structured surfaces.
   - Undocumented internal APIs might be more compact, but are explicitly
     disallowed by current robots directives and are more likely to change.
-  - Detail-page crawling would enrich descriptions, but multiplies request
-    volume and should be a separate, source-compliance-reviewed stage.
+  - A separate enrichment queue could make detail failures independently
+    retryable, but requires durable worker infrastructure that the project has
+    not selected.
 - **Constraints and risks:** Publisher terms and applicable law can restrict
   collection even when a page is publicly reachable; removing an application
   flag does not grant permission. The operator is responsible for enabling
-  only permitted sources. The adapters remain GET-only, rate-limited, and
-  truthfully identified; they stop on access errors and never evade rate
-  limits, logins, or anti-bot measures.
+  only permitted sources. Detail requests use the same GET-only, rate-limited,
+  truthfully identified client as listing requests; adapters stop on access or
+  schema errors and never evade rate limits, logins, or anti-bot measures.
 - **Revisit when:** A board offers an official API or feed, removes public
   access, grants the owner written collection permission, changes its
   terms/robots policy, or the listing payload schema changes.
@@ -157,7 +173,9 @@ conditions under which the decision should be revisited.
 ## 7. Transactional Materialized Counters Instead of Scans
 
 - **Choice:** Increment total and per-source counter items transactionally when
-  a new occurrence is inserted, and store a latest-run summary item.
+  a new occurrence is inserted, use a deterministic request token, and retry
+  only explicitly reported transaction conflicts with bounded exponential
+  backoff and jitter. Store a latest-run summary item.
 - **Why:** The dashboard needs a few exact totals. Materialized counters make
   that request constant-size and avoid expensive full-table scans.
 - **Relevant files:** `backend/app/db/repositories.py`,
@@ -170,9 +188,16 @@ conditions under which the decision should be revisited.
     configuration.
   - Periodic analytics jobs can produce richer aggregates, but add a scheduler
     and delay for a dashboard that currently needs only counts.
+  - Serializing all source writes behind a process lock avoids local counter
+    conflicts, but discards write concurrency and cannot coordinate multiple
+    application instances.
 - **Constraints and risks:** Counters are source-occurrence counts, not
-  cross-source vacancy counts. Deletion and merge workflows must update them
-  transactionally when those workflows are added.
+  cross-source vacancy counts. Concurrent sources contend on the total counter;
+  five application retries bound the delay and then fail loudly rather than
+  loop indefinitely. Conditional duplicate races retain their idempotent
+  update fallback, while unknown transaction cancellations are not retried.
+  Deletion and merge workflows must update counters transactionally when those
+  workflows are added.
 - **Revisit when:** The dashboard needs historical series, grouped analytics,
   or independently repairable counters at much larger scale.
 

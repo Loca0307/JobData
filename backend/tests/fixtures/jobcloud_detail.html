@@ -1,0 +1,65 @@
+<html>
+  <head>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "JobPosting",
+        "identifier": {
+          "@type": "PropertyValue",
+          "name": "Job ID",
+          "value": "job-1"
+        },
+        "title": "Senior Data Engineer",
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": "Example AG",
+          "sameAs": "https://example.test"
+        },
+        "jobLocation": {
+          "@type": "Place",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Example Street 1",
+            "postalCode": "8000",
+            "addressRegion": "Zürich",
+            "addressCountry": "CH"
+          }
+        },
+        "applicantLocationRequirements": {
+          "@type": "Country",
+          "name": "Switzerland"
+        },
+        "jobLocationType": "TELECOMMUTE",
+        "description": "<h2>Your role</h2><p>Build reliable data platforms.</p><h2>Your profile</h2><p>Five years of Python experience.</p>",
+        "employmentType": "Permanent position",
+        "workHours": "32 - 32 hours/week",
+        "occupationalCategory": {
+          "@type": "CategoryCode",
+          "codeValue": "123",
+          "name": "Data Engineering"
+        },
+        "baseSalary": {
+          "@type": "MonetaryAmount",
+          "currency": "CHF",
+          "value": {
+            "@type": "QuantitativeValue",
+            "minValue": 120000,
+            "maxValue": 140000,
+            "unitText": "YEAR"
+          }
+        },
+        "skills": ["Python", "AWS"],
+        "jobBenefits": ["Flexible hours", "Pension"],
+        "datePosted": "2026-07-10T08:30:00Z",
+        "validThrough": "2026-08-10T08:30:00Z",
+        "potentialAction": {
+          "@type": "ApplyAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://example.test/jobs/job-1/apply"
+          }
+        }
+      }
+    </script>
+  </head>
+</html>

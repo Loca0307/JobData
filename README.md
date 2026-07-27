@@ -13,9 +13,22 @@ Adapters exist for:
 - `swissdevjobs.ch`
 
 The two JobCloud adapters enumerate unfiltered listing pages until an empty or
-repeated page. SwissDevJobs reads the RSS surface once. No title, location,
-skill, or profile filters are applied. All three adapters are enabled by
-default and require no project-specific authorization flag.
+repeated page, including the source-specific query parameters needed to
+preserve pagination, and then read each job's public structured detail page.
+SwissDevJobs reads the RSS surface once and enriches each item from its public
+detail record. No title, location, skill, or profile filters are applied. All
+three adapters are enabled by default and require no project-specific
+authorization flag.
+
+Each DynamoDB `job_occurrence` stores canonical fields in the
+`normalized_job` map and the complete source evidence in the `raw_payload`
+map. Depending on what the publisher exposes, canonical data can include title
+and position, company, full description, responsibilities, requirements,
+address/location, work arrangement, employment type, schedule, seniority,
+occupation, salary range/currency/period, skills, languages, benefits, apply
+URL, and posting/expiry/update dates. A field stays null or empty when the
+source does not publish it; in particular, the scraper does not estimate
+undisclosed salaries.
 
 The operator remains responsible for ensuring each enabled source may be
 collected in the intended jurisdiction and use case. The application does not
@@ -181,8 +194,16 @@ static credential variables and let boto3 use the role.
 “All jobs” means all distinct source IDs exposed by an enabled, implemented
 public listing surface during a successful run. It does not include
 authenticated, hidden, personalized, expired, or otherwise restricted records.
+Every JobCloud and SwissDevJobs occurrence also makes one detail request using
+the same per-source rate limit, so a complete run is deliberately much slower
+than summary-only collection.
 
 Re-running ingestion updates `last_seen_at`, provenance, content hash, and raw
 payload for an existing source ID. It does not create another occurrence.
+Records collected before detail enrichment remain summary-only until the next
+successful run updates them.
+Concurrent DynamoDB counter conflicts receive bounded retries with backoff;
+duplicate races remain idempotent, and other transaction cancellations fail
+the affected source visibly.
 Missing listings are not marked inactive after one run; a source-aware
 multi-run inactivity policy has not been implemented yet.
