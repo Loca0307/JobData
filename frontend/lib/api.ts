@@ -27,6 +27,22 @@ export type JobCounts = {
   latest_run: ScrapeRun | null;
 };
 
+export type DemandMapPoint = {
+  name: string;
+  latitude: number;
+  longitude: number;
+  job_count: number;
+};
+
+export type DemandMapResult = {
+  role: string;
+  matching_jobs: number;
+  mapped_jobs: number;
+  unmapped_jobs: number;
+  is_truncated: boolean;
+  points: DemandMapPoint[];
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -39,6 +55,24 @@ export async function fetchJobCounts(signal?: AbortSignal): Promise<JobCounts> {
     throw new Error(`The JobData API returned ${response.status}.`);
   }
   return response.json() as Promise<JobCounts>;
+}
+
+export async function fetchDemandMap(
+  role: string,
+  signal?: AbortSignal,
+): Promise<DemandMapResult> {
+  const query = new URLSearchParams({ role });
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/analysis/demand-map?${query}`,
+    {
+      signal,
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`The JobData API returned ${response.status}.`);
+  }
+  return response.json() as Promise<DemandMapResult>;
 }
 
 export async function startScrapeRun(): Promise<ScrapeRun> {

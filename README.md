@@ -41,7 +41,8 @@ Create the table yourself with:
 
 The application never creates or mutates table configuration. Its AWS identity
 needs `dynamodb:DescribeTable`, `dynamodb:GetItem`,
-`dynamodb:BatchGetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, and
+`dynamodb:BatchGetItem`, `dynamodb:Query`, `dynamodb:PutItem`,
+`dynamodb:UpdateItem`, and
 `dynamodb:TransactWriteItems` on this table.
 
 Required environment:
@@ -105,12 +106,17 @@ Endpoints:
 - `GET /api/v1/health`
 - `GET /api/v1/readiness`
 - `GET /api/v1/stats/jobs`
+- `GET /api/v1/analysis/demand-map?role=engineer`
 - `POST /api/v1/ingestion/runs`
 - `GET /api/v1/ingestion/runs/{run_id}`
 
 The ingestion POST creates a persisted run and returns `202 Accepted`
 immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES` in
 the background. Query the returned run ID to observe its status.
+
+The demand-map endpoint queries a bounded title/location index populated during
+ingestion. It returns recognized Swiss cities with coordinates and counts,
+along with explicit unmapped and truncated-result counts.
 
 Run backend checks:
 
@@ -145,7 +151,10 @@ npm run build
 
 The dashboard reads aggregate counts and run status through FastAPI. “Run all
 scrapers” starts every enabled adapter, polls the returned run ID, and refreshes
-the totals when the run finishes. It never connects to DynamoDB directly.
+the totals when the run finishes. The role-demand map plots recognized Swiss
+cities from the bounded ingestion-built index without downloading all jobs or
+using an external map service. Existing jobs appear on the map after their next
+ingestion. The frontend never connects to DynamoDB directly.
 
 ## Docker Compose
 

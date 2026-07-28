@@ -3,8 +3,17 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 
+from app.analysis.demand_map import build_demand_map, title_terms
+from app.analysis.models import DemandMapResult
 from app.core.settings import get_settings
 from app.db.dynamodb import get_dynamodb_client
 from app.db.repositories import DynamoIngestionRepository, IngestionRepository
@@ -48,6 +57,27 @@ def job_counts(
     ],
 ) -> JobCounts:
     return repository.get_counts(get_all_source_names())
+
+
+@router.get("/analysis/demand-map", response_model=DemandMapResult)
+def job_demand_map(
+    role: Annotated[str, Query(min_length=2, max_length=80)],
+    repository: Annotated[
+        IngestionRepository, Depends(get_ingestion_repository)
+    ],
+) -> DemandMapResult:
+    if not title_terms(role):
+        raise HTTPException(
+            status_code=422,
+            detail="Role must contain at least one word",
+        )
+    candidate_limit = 1_000
+    jobs = repository.get_indexed_job_locations(role, limit=candidate_limit)
+    return build_demand_map(
+        role,
+        jobs,
+        is_truncated=len(jobs) == candidate_limit,
+    )
 
 
 @router.post(

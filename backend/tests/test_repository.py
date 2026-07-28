@@ -6,6 +6,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 import app.db.repositories as repositories
+from app.analysis.models import IndexedJobLocation
 from app.db.repositories import (
     DynamoIngestionRepository,
     _content_hash,
@@ -80,6 +81,13 @@ def test_repository_creates_atomic_counter_updates_for_new_occurrence():
     assert normalized["salary"]["S"] == "CHF 120000–140000 per year"
     assert normalized["required_languages"]["L"][0]["S"] == "English"
     assert len(client.transaction_tokens[0]) == 36
+    role_index = client.transactions[1]
+    role_keys = {
+        item["Put"]["Item"]["PK"]["S"]
+        for item in role_index
+        if "Put" in item and item["Put"]["Item"]["PK"]["S"].startswith("ROLE#")
+    }
+    assert role_keys == {"ROLE#data", "ROLE#engineer"}
 
 
 def test_repository_retries_transaction_conflicts_with_bounded_backoff(
@@ -95,8 +103,10 @@ def test_repository_retries_transaction_conflicts_with_bounded_backoff(
     created = repository.save_record(make_record(), "run-1")
 
     assert created is True
-    assert len(client.transactions) == 3
-    assert len(set(client.transaction_tokens)) == 1
+    assert len(client.transactions) == 4
+    occurrence_transactions = client.transactions[:3]
+    assert len(occurrence_transactions) == 3
+    assert len(set(client.transaction_tokens[:3])) == 1
     assert sleeps == [0.05, 0.1]
 
 
@@ -175,6 +185,51 @@ def test_repository_reads_a_specific_scrape_run():
     assert client.gets[0]["ConsistentRead"] is True
 
 
+def test_repository_queries_role_index_without_scanning():
+    client = RecordingClient(
+        query_items=[
+            IndexedJobLocation(
+                title="Data Engineer",
+                location="Zürich",
+            ),
+            IndexedJobLocation(
+                title="Senior Engineer",
+                location="Bern",
+            ),
+        ]
+    )
+    repository = DynamoIngestionRepository(client, "JobData")
+
+    jobs = repository.get_indexed_job_locations("engineer", limit=100)
+
+    assert len(jobs) == 2
+    assert client.queries[0]["KeyConditionExpression"] == "PK = :pk"
+    assert client.queries[0]["ExpressionAttributeValues"][":pk"]["S"] == (
+        "ROLE#engineer"
+    )
+
+
+def test_repository_removes_obsolete_role_terms_on_update():
+    client = RecordingClient(
+        existing=True,
+        index_terms=["data", "engineer"],
+    )
+    repository = DynamoIngestionRepository(client, "JobData")
+    record = make_record()
+    record.normalized_job.title = "Machine Learning Engineer"
+
+    created = repository.save_record(record, "run-2")
+
+    assert created is False
+    index_transaction = client.transactions[0]
+    deleted_keys = {
+        item["Delete"]["Key"]["PK"]["S"]
+        for item in index_transaction
+        if "Delete" in item
+    }
+    assert deleted_keys == {"ROLE#data"}
+
+
 class RecordingClient:
     def __init__(
         self,
@@ -182,6 +237,8 @@ class RecordingClient:
         existing: bool = False,
         run: ScrapeRun | None = None,
         transaction_errors: list[ClientError] | None = None,
+        query_items: list[IndexedJobLocation] | None = None,
+        index_terms: list[str] | None = None,
     ) -> None:
         self.existing = existing
         self.run = run
@@ -189,6 +246,9 @@ class RecordingClient:
         self.transactions: list[list[dict]] = []
         self.transaction_tokens: list[str] = []
         self.gets: list[dict] = []
+        self.queries: list[dict] = []
+        self.query_items = query_items or []
+        self.index_terms = index_terms
         self.update_calls = 0
 
     def update_item(self, **kwargs):
@@ -224,6 +284,18 @@ class RecordingClient:
 
     def get_item(self, **kwargs):
         self.gets.append(kwargs)
+        key = kwargs["Key"]
+        if (
+            self.index_terms is not None
+            and key["SK"]["S"] == "ROLE_LOCATION_INDEX"
+        ):
+            return {
+                "Item": {
+                    "PK": key["PK"],
+                    "SK": key["SK"],
+                    "terms": _serialize_attribute(self.index_terms),
+                }
+            }
         if self.run is None:
             return {}
         return {
@@ -236,6 +308,18 @@ class RecordingClient:
                     for key, value in self.run.model_dump(mode="json").items()
                 },
             }
+        }
+
+    def query(self, **kwargs):
+        self.queries.append(kwargs)
+        return {
+            "Items": [
+                {
+                    "title": {"S": item.title},
+                    "location": {"S": item.location},
+                }
+                for item in self.query_items
+            ]
         }
 
 

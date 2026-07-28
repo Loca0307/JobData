@@ -90,6 +90,35 @@
 - The frontend never receives AWS credentials or accesses DynamoDB directly.
 - `backend/tests/test_api.py` covers the operational API.
 
+## Job Analysis and Demand Map
+
+- `backend/app/analysis/summary.py` calculates descriptive counts from any
+  iterable of `NormalizedJob` objects. `backend/app/analysis/models.py`
+  defines the typed summary and map outputs.
+- During each new or repeated ingestion,
+  `backend/app/db/repositories.py` extracts at most 12 normalized title terms
+  and transactionally upserts a minimal role/location item for each term.
+  Metadata on the job partition records the terms so obsolete entries can be
+  deleted when a title or location changes.
+- `GET /api/v1/analysis/demand-map?role=<role>` in
+  `backend/app/api/routes.py` queries the longest role term. It reads at most
+  1,000 candidates and never scans the table.
+- `backend/app/analysis/demand_map.py` verifies all requested title terms,
+  resolves common free-text Swiss locations with a small local city gazetteer,
+  and returns aggregated coordinates and counts. Unrecognized locations and
+  bounded/truncated results are reported explicitly.
+- `frontend/lib/api.ts` retrieves the typed result.
+  `frontend/components/demand-map.tsx` renders it as a responsive inline SVG
+  map and an accessible ranked city list. `frontend/app/globals.css` contains
+  the map styling; no map tiles, browser geocoding, or client-side job dataset
+  are used.
+- An index write failure fails the affected ingestion source visibly. Repeating
+  ingestion is idempotent and repairs role/location entries. Existing stored
+  jobs become map-visible after their next ingestion.
+- `backend/tests/test_analysis.py`, `backend/tests/test_repository.py`, and
+  `backend/tests/test_api.py` cover aggregation, location resolution, indexed
+  queries, index writes, and the API response.
+
 ## Containers
 
 - `backend/Dockerfile` and `frontend/Dockerfile` build the two applications.

@@ -3,6 +3,7 @@
 ## Dev comments
 
 - As I am using this project to understand better things, implememt the features using the best practices but as simply as possible, and add comments on the most complicated or domain specific parts of the code.
+- Abstract where necessary for more comprehension and fucntion but don't over abstract an don't create a unnecessary number of classes to abstract the work. Don't over complicate things.
 
 ## Project Overview
 

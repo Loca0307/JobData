@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 import app.api.routes as routes
+from app.analysis.models import IndexedJobLocation
 from app.api.main import create_app
 from app.api.routes import get_ingestion_repository
 from app.models.runs import JobCounts, RunStatus, ScrapeRun
@@ -31,6 +32,18 @@ class StatsRepository:
             },
         )
 
+    def get_indexed_job_locations(
+        self,
+        role: str,
+        limit: int,
+    ) -> list[IndexedJobLocation]:
+        assert role == "engineer"
+        assert limit == 1_000
+        return [
+            IndexedJobLocation(title="Data Engineer", location="Zürich"),
+            IndexedJobLocation(title="Software Engineer", location="Geneva"),
+        ]
+
 
 def test_health_does_not_trigger_dynamodb_access():
     with TestClient(create_app(validate_config=False)) as client:
@@ -50,6 +63,25 @@ def test_job_counts_are_bounded_aggregate_data():
     assert response.status_code == 200
     assert response.json()["total"] == 12
     assert response.json()["by_source"]["jobs.ch"] == 7
+
+
+def test_demand_map_returns_map_ready_aggregates():
+    app = create_app(validate_config=False)
+    app.dependency_overrides[get_ingestion_repository] = StatsRepository
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/analysis/demand-map",
+            params={"role": "engineer"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["matching_jobs"] == 2
+    assert response.json()["mapped_jobs"] == 2
+    assert [point["name"] for point in response.json()["points"]] == [
+        "Geneva",
+        "Zürich",
+    ]
 
 
 def test_ingestion_endpoint_returns_accepted_run_and_exposes_status(monkeypatch):

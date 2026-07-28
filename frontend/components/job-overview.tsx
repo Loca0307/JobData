@@ -9,6 +9,7 @@ import {
   type JobCounts,
   type ScrapeRun,
 } from "@/lib/api";
+import { DemandMap } from "@/components/demand-map";
 
 const SOURCE_LABELS: Record<string, string> = {
   "jobs.ch": "jobs.ch",
@@ -240,6 +241,8 @@ export function JobOverview() {
           </p>
         )}
       </section>
+
+      <DemandMap />
     </main>
   );
 }

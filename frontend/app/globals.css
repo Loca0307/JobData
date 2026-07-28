@@ -154,7 +154,8 @@ h1 {
 
 .total-card,
 .source-card,
-.run-card {
+.run-card,
+.demand-card {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgb(255 253 248 / 84%);
@@ -290,9 +291,179 @@ dd {
   color: var(--muted);
 }
 
+.demand-card {
+  margin-top: 22px;
+  padding: clamp(26px, 5vw, 44px);
+}
+
+.demand-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 30px;
+}
+
+.demand-heading h2 {
+  margin-bottom: 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.4rem;
+  font-weight: 500;
+}
+
+.demand-heading > div > p:last-child {
+  max-width: 540px;
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.role-filter {
+  min-width: min(100%, 360px);
+}
+
+.role-filter label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.role-filter > div {
+  display: flex;
+}
+
+.role-filter input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px 0 0 10px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+
+.role-filter button {
+  padding: 0 17px;
+  border: 1px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  color: white;
+  background: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.role-filter button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.role-filter input:focus-visible,
+.role-filter button:focus-visible {
+  z-index: 1;
+  outline: 3px solid rgb(15 107 80 / 25%);
+  outline-offset: 2px;
+}
+
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 28px;
+  align-items: center;
+}
+
+.swiss-map {
+  min-width: 0;
+  padding: 18px;
+  border-radius: 16px;
+  background: #edf2ed;
+}
+
+.swiss-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.country-shape {
+  fill: #fffdf8;
+  stroke: #b9c9c0;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.demand-point circle {
+  fill: rgb(15 107 80 / 78%);
+  stroke: white;
+  stroke-width: 3;
+}
+
+.demand-point text {
+  fill: white;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+  text-anchor: middle;
+}
+
+.map-summary {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+}
+
+.map-role {
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.map-summary > strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 4rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.map-summary > span,
+.map-summary small {
+  color: var(--muted);
+}
+
+.map-summary ol {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-summary li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.map-message {
+  margin: auto 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
 @media (max-width: 760px) {
   main {
-    width: min(100% - 24px, 1120px);
+    width: min(calc(100% - 24px), 1120px);
     padding-top: 36px;
   }
 
@@ -307,8 +478,22 @@ dd {
   }
 
   .summary,
-  .run-card {
+  .run-card,
+  .map-layout {
     grid-template-columns: 1fr;
+  }
+
+  .demand-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .role-filter {
+    width: 100%;
+  }
+
+  .map-summary {
+    min-height: auto;
   }
 
   .total-card {

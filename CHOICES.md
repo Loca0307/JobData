@@ -126,3 +126,63 @@
   - DynamoDB Local supports offline development but creates a second database
     workflow.
 - **Revisit when:** Offline development becomes a requirement.
+
+## 9. Storage-Independent Analysis Core
+
+- **Choice:** Begin analysis as pure functions over `NormalizedJob` objects,
+  with typed summary results and no direct DynamoDB or FastAPI dependency.
+- **Why:** It creates a reusable analysis boundary while the required
+  production access patterns and reports are still undefined.
+- **Relevant files:** `backend/app/analysis/models.py`,
+  `backend/app/analysis/summary.py`, and `backend/tests/test_analysis.py`.
+- **Alternatives:**
+  - Reading DynamoDB directly inside each calculation is immediately usable
+    with stored data but couples analysis to table keys and may require scans.
+  - Adding a dataframe library provides richer exploration but is unnecessary
+    for the current categorical summaries.
+- **Constraints and risks:** Pure calculations still require a caller to load
+  bounded input. The demand-map endpoint provides one such caller.
+- **Revisit when:** A concrete report or large-dataset access pattern is
+  defined.
+
+## 10. Ingestion-Built Role and Location Index
+
+- **Choice:** Store bounded title-term/location items during ingestion and
+  query them by DynamoDB partition key for map requests.
+- **Why:** The current table has no job-listing access index. This supports
+  arbitrary title words without scanning the job table or downloading all jobs
+  to the browser.
+- **Relevant files:** `backend/app/db/repositories.py`,
+  `backend/app/analysis/demand_map.py`,
+  `backend/app/api/routes.py`, and `backend/tests/test_repository.py`.
+- **Alternatives:**
+  - A DynamoDB scan is simpler to add but is inefficient and prohibited in
+    production request paths.
+  - A search service supports richer full-text queries but adds infrastructure
+    that the current use case does not justify.
+  - Pre-aggregating only known roles is cheaper to query but prevents users
+    from choosing their own title words.
+- **Constraints and risks:** Each job adds at most 12 small index items. A map
+  query examines at most 1,000 candidates and reports when that limit is
+  reached. Existing jobs require one repeat ingestion to populate the index.
+- **Revisit when:** Role queries regularly reach the safety limit or require
+  stemming, synonyms, or complex search.
+
+## 11. Local Swiss Map and City Gazetteer
+
+- **Choice:** Use a responsive inline SVG outline and a small server-side list
+  of major Swiss employment centres with multilingual aliases.
+- **Why:** It produces a useful first map without map tiles, API keys, browser
+  geocoding, or another frontend dependency.
+- **Relevant files:** `backend/app/analysis/demand_map.py`,
+  `frontend/components/demand-map.tsx`, and
+  `frontend/app/globals.css`.
+- **Alternatives:**
+  - A map library provides pan, zoom, and detailed boundaries but adds weight
+    before those interactions are needed.
+  - An external geocoder recognizes more locations but introduces cost,
+    network availability, caching, and address-sharing concerns.
+- **Constraints and risks:** Unknown towns, broad regions, and remote-only
+  strings are reported as unmapped rather than guessed.
+- **Revisit when:** Unmapped locations materially distort analysis or the map
+  needs detailed geographic interaction.
