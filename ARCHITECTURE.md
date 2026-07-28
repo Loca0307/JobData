@@ -6,168 +6,93 @@
 - boto3 and DynamoDB
 - HTTPX, Beautiful Soup, and Python XML ElementTree
 - pytest, respx, and Ruff
-- Next.js 16, React 19, TypeScript, and ESLint
-- Docker and Docker Compose for local application containers
+- Next.js, React, TypeScript, and ESLint
+- Docker and Docker Compose
 
-## Unfiltered Swiss Job-Board Adapters
+## Job Collection
 
-- The shared contract in `backend/app/scrapers/base.py` makes every adapter emit
-  `SourceRecord` values and keeps persistence outside source code.
-- `backend/app/scrapers/jobcloud.py` contains one JobCloud implementation with
-  concrete jobs.ch and jobup.ch subclasses. It walks the public unfiltered
-  listing pages in order until a valid empty or repeated page, then fetches the
-  public detail page for every unseen source ID. Detail-page JobPosting JSON-LD
-  supplies the compact normalized fields and retains descriptions,
-  responsibilities, requirements, company data, addresses, work terms, salary,
-  skills, benefits, application URL, and dates in the raw evidence.
-  Source-specific query parameters are preserved on every page; jobs.ch keeps
-  the required empty `term` value so its page number is not redirected away.
-- `backend/app/scrapers/swissdevjobs.py` fetches one RSS document, parses every
-  item without keyword or location filters, strips tracking query parameters,
-  and fetches each canonical public detail page. It combines RSS description
-  sections and salary evidence with the detail page's address, work terms,
-  seniority, annual salary bounds, technology stack, company metadata, and
-  dates.
-- `backend/app/scrapers/http.py` supplies bounded redirects, connect/read
-  timeouts, shared request spacing, and retry-after-aware transient retries.
-  Fetch targets are fixed by the adapters.
-- `backend/app/models/jobs.py` uses the compact JobFinder-style normalized
-  contract: title, company, location, description, requirements, seniority,
-  employment/remote type, salary text, required languages, source URLs,
-  posting/scrape timestamps, and external ID. Unknown values stay null or
-  empty. `SourceRecord` contains only that normalized job and one raw payload;
-  source identity is read from the normalized job instead of being copied into
-  the wrapper.
-- `backend/app/scrapers/registry.py` makes source selection
-  configuration-driven with one direct source-name-to-class mapping. Every
-  registered adapter is enabled by default and `SCRAPER_ENABLED_SOURCES` can
-  select a subset without any project-specific authorization setting.
-- Inputs are listing HTML, detail HTML, or RSS XML. Outputs are source
-  occurrences; adapters never write to DynamoDB. Every record retains both its
-  summary/feed payload and detail payload. HTTP, parser, identity mismatch,
-  schema, and safety-limit failures stop that source instead of producing a
-  false empty result.
-- `backend/tests/test_jobcloud.py`,
-  `backend/tests/test_swissdevjobs.py`, `backend/tests/test_http.py`, and
-  `backend/tests/test_registry.py` cover pagination, repetition, malformed
-  inputs, detail identity checks, normalized enrichment, source-specific query
-  parameters, raw retention, transient retries, rate limiting, registry
-  contracts, and enabled-source selection using sanitized fixtures in
-  `backend/tests/fixtures/jobcloud_detail.html`,
-  `backend/tests/fixtures/swissdevjobs_detail.html`, and the other fixture
-  files in `backend/tests/fixtures/`.
+- `backend/app/scrapers/registry.py` constructs the enabled `jobs.ch`,
+  `jobup.ch`, and `swissdevjobs.ch` adapters from configuration.
+- Every adapter implements `BaseJobScraper.scrape_all()` from
+  `backend/app/scrapers/base.py` and yields `SourceRecord` objects. Scrapers do
+  not write to DynamoDB.
+- `backend/app/scrapers/http.py` contains a thread-safe
+  `RequestRateLimiter` and a small HTTP client. Together they apply a truthful
+  user agent, per-source request spacing, timeouts, bounded redirects, and
+  bounded retries with exponential backoff. Numeric `Retry-After` values are
+  honored.
+- `backend/app/scrapers/jobcloud.py` shares one implementation between jobs.ch
+  and jobup.ch. It reads the public listing payload, stops at an empty or
+  repeated page, and reads each public JobPosting JSON-LD detail record.
+- `backend/app/scrapers/swissdevjobs.py` reads the RSS feed and each public
+  embedded detail record.
+- Both adapters normalize only the core fields used by `NormalizedJob` and
+  retain the listing/feed and structured detail objects in `raw_payload`.
+  Missing fields remain null. They do not contain the previous large set of
+  source-specific extraction helpers.
+- Missing listing markers, malformed payloads, mismatched detail identities,
+  HTTP failures, and pagination-limit exhaustion fail the affected source
+  visibly.
+- `backend/tests/test_http.py`, `backend/tests/test_jobcloud.py`,
+  `backend/tests/test_swissdevjobs.py`, and fixtures under
+  `backend/tests/fixtures/` cover this reduced workflow without live traffic.
 
-## DynamoDB Ingestion and Scrape Runs
+## Normalized Records
 
-- `backend/app/services/ingestion.py` starts one scrape run and executes
-  enabled sources concurrently. Each source remains isolated: records
-  already written by a failed source remain stored, successful sources finish,
-  and the overall result becomes completed, partial, or failed.
-- `backend/app/db/repositories.py` is the persistence boundary. A source
-  occurrence receives a deterministic ID derived from source name and source
-  job ID. Existing occurrences update their last-seen time, run ID, normalized
-  data, raw data, and content hash rather than creating duplicates.
-- Every occurrence item contains the complete canonical object under
-  `normalized_job` and the lossless source evidence under `raw_payload`.
-  The raw payload is not duplicated inside `normalized_job`; source-specific
-  details that do not fit the compact model remain available in that raw map.
-  Unpublished values remain null or empty; detail enrichment never fabricates
-  salary, location, or other missing facts.
-- The owner-provisioned table needs only string partition key `PK` and sort key
-  `SK`. Job occurrences use `JOB#<stable-id>` /
-  `SOURCE#<source>#<source-id>`; scrape runs use `RUN#<run-id>` / `META` plus
-  one `SOURCE#<source>` result item.
-- New occurrence creation and aggregate counter increments are one DynamoDB
-  transaction. Count items use `STATS` / `TOTAL` and
-  `STATS` / `SOURCE#<source>`. The latest completed run is stored at
-  `STATS` / `LATEST_RUN`, so API reads use a bounded batch get and never scan.
-- Each new-occurrence transaction has a deterministic request token for safe
-  retries. `backend/app/db/repositories.py` distinguishes a conditional
-  duplicate race from a shared-counter `TransactionConflict`: duplicate races
-  update the winning item, conflicts receive at most five exponential-backoff
-  retries with jitter, and unknown cancellations fail the source.
-- `backend/app/db/dynamodb.py` uses the normal AWS credential chain and reads
-  region, table, and optional local endpoint settings. It never creates or
-  changes the table.
-- `backend/app/workers/scrape_all.py` is the scheduler-neutral command-line
-  entry point. It validates DynamoDB settings, builds every enabled adapter,
-  invokes the pipeline, and prints the completed run summary.
-- `backend/app/services/ingestion.py` separates persisted run creation from
-  execution so HTTP callers can receive a running `ScrapeRun` before the
-  source work begins. The existing command-line worker still uses the combined
-  synchronous entry point.
-- The repository does not mark a listing inactive after a missing observation.
-  Inactivity remains unchanged until a source-aware multi-run policy is
-  implemented.
-- `backend/tests/test_repository.py` and
-  `backend/tests/test_ingestion.py` cover stable identity, content hashing,
-  the compact persisted model shape, single raw-payload retention, atomic
-  counters, idempotent sightings, reason-aware transaction retries, partial
-  failures, run summaries, and the no-enabled-source guard without contacting
-  AWS.
+- `backend/app/models/jobs.py` defines `NormalizedJob` and `SourceRecord`.
+- `NormalizedJob` is the small common representation used by persistence.
+- `SourceRecord.raw_payload` preserves source evidence for later reprocessing.
+- The source name and source job ID identify an occurrence. The implementation
+  does not attempt uncertain cross-source vacancy matching.
 
-## Operational and Aggregate API
+## Ingestion
 
-- `backend/app/api/main.py` creates the FastAPI application, validates required
-  DynamoDB configuration at startup, and permits configured frontend origins.
-- `backend/app/api/routes.py` exposes `/api/v1/health` without external work,
-  `/api/v1/readiness` with a table readiness check, and
-  `/api/v1/stats/jobs` for total, per-source, and latest-run aggregates. It
-  also exposes `POST /api/v1/ingestion/runs` to persist and schedule a run and
-  `GET /api/v1/ingestion/runs/{run_id}` to read its strongly consistent
-  status. The same small module constructs the cached repository dependency;
-  a separate one-function dependency module is unnecessary.
-- Inputs are GET requests plus the bodyless ingestion POST. Outputs are typed
-  JSON responses; the POST returns `202 Accepted` with the running scrape-run
-  ID before its in-process background task executes. DynamoDB or configuration
-  failures make readiness fail; health never starts a scrape.
-- `backend/app/db/repositories.py` persists and reads individual run metadata.
-  `backend/tests/test_api.py` and `backend/tests/test_repository.py` verify the
-  side-effect-free health response, bounded aggregates, asynchronous run
-  creation, status lookup, missing-run response, and DynamoDB key access.
+- `backend/app/services/ingestion.py` creates a scrape run and executes enabled
+  sources concurrently.
+- Each yielded record is sent to the `IngestionRepository` interface.
+- A source failure does not discard records already stored by that source or
+  successful results from other sources.
+- The final run status is completed, partial, or failed.
+- `backend/app/workers/scrape_all.py` provides the command-line entry point.
+- `backend/tests/test_ingestion.py` covers partial failure, repeat ingestion,
+  and the no-enabled-source case.
 
-## Private Count Dashboard
+## DynamoDB Persistence
 
-- `frontend/app/page.tsx` renders the single private overview screen through
-  `frontend/components/job-overview.tsx`.
-- `frontend/lib/api.ts` is the typed API client. It reads only
-  aggregate and scrape-run endpoints; the browser never receives AWS
-  credentials or direct DynamoDB access.
-- `frontend/app/globals.css` provides the responsive layout, loading, empty,
-  failure, action, and run-status states. The dashboard shows total stored
-  source occurrences, one total for each implemented source, and the latest or
-  actively requested run.
-- `frontend/components/job-overview.tsx` starts all configured sources from
-  the “Run all scrapers” button, disables duplicate clicks while that run is
-  active, polls its exact run ID every two seconds, and refreshes aggregates
-  when it reaches a terminal state. Initial loading and manual refresh reuse
-  the same request/state handler.
-- `frontend/app/layout.tsx`, `frontend/next.config.ts`,
-  `frontend/tsconfig.json`, and `frontend/eslint.config.mjs` define the
-  production Next.js shell and checks.
-- The frontend input is the FastAPI base URL. Output is a private operational
-  dashboard; failed reads and start requests display retryable errors and do
-  not retain credentials or job data.
+- `backend/app/db/repositories.py` owns all DynamoDB keys and serialization.
+- A deterministic hash of source name and source job ID produces the internal
+  occurrence ID.
+- Existing occurrences update their last-seen data. New occurrences are
+  inserted in the same transaction that increments total and per-source
+  counters.
+- The transaction uses a deterministic request token. Duplicate insert races
+  update the winning item, and temporary transaction conflicts receive bounded
+  retries.
+- Scrape runs use `RUN#<run-id>` items. Aggregate counters and the latest
+  completed run use `STATS` items.
+- `get_counts()` batch-reads a fixed set of keys and never scans the job table.
+- `backend/app/db/dynamodb.py` uses the normal AWS credential chain and never
+  creates or changes the owner-provisioned table.
+- `backend/tests/test_repository.py` covers IDs, hashing, new and existing
+  records, counters, transaction conflicts, and run reads.
 
-## Application Containers
+## API and Dashboard
 
-- `frontend/Dockerfile` uses one Node 22 Alpine stage: install from the lockfile,
-  copy source, build Next.js, prune development packages, and start the
-  production server.
-- `frontend/next.config.ts` uses the normal Next.js server output so the simple
-  `npm start` container command works without standalone-file copying.
-- `backend/Dockerfile` installs `backend/requirements.txt` and starts the
-  FastAPI application with Uvicorn.
-- `compose.yaml` starts only `backend` and `frontend`. It passes AWS region,
-  table name, and required local credential environment variables from the
-  ignored root `.env` file to the backend. `.env.example` documents the
-  temporary assumed-role credential fields without containing secrets.
-- Backend directories are Python namespace packages and therefore do not
-  contain `__init__.py` marker files. Imports continue to resolve from the
-  backend application root in the Python 3.12 runtime.
-- Inputs are the root `.env` values and optional frontend API build URL.
-  Outputs are the dashboard on port 3000 and API on port 8000. Missing local
-  credentials fail Compose interpolation before startup; expired or
-  unauthorized credentials remain backend readiness or API failures. Compose
-  contains no DynamoDB image, table bootstrap, endpoint override, or AWS
-  resource provisioning.
+- `backend/app/api/main.py` configures FastAPI, startup validation, and CORS.
+- `backend/app/api/routes.py` exposes health, readiness, aggregate counts,
+  scrape-run creation, and scrape-run status endpoints under `/api/v1`.
+- The ingestion POST stores a running record, returns `202`, and starts an
+  in-process FastAPI background task.
+- `frontend/lib/api.ts` is the typed API client.
+- `frontend/components/job-overview.tsx` displays occurrence counts and run
+  state, starts a run, polls every two seconds, and refreshes totals when the
+  run finishes.
+- The frontend never receives AWS credentials or accesses DynamoDB directly.
+- `backend/tests/test_api.py` covers the operational API.
+
+## Containers
+
+- `backend/Dockerfile` and `frontend/Dockerfile` build the two applications.
+- `compose.yaml` runs only FastAPI and Next.js. It does not provision DynamoDB.
+- Inputs are the documented environment variables. Outputs are the API on port
+  8000 and dashboard on port 3000.

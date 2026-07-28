@@ -16,8 +16,8 @@ def test_rate_limiter_spaces_request_starts():
     sleeps: list[float] = []
     limiter = RequestRateLimiter(
         2,
-        clock=lambda: next(times),
         sleeper=sleeps.append,
+        clock=lambda: next(times),
     )
 
     limiter.wait()
@@ -35,13 +35,9 @@ def test_http_client_retries_throttling_and_honors_retry_after():
         ]
     )
     sleeps: list[float] = []
-    settings = Settings(
-        SCRAPER_MAX_RETRIES=1,
-        SCRAPER_RETRY_BACKOFF_SECONDS=0,
-    )
 
     with ScraperHttpClient(
-        settings,
+        Settings(SCRAPER_MAX_RETRIES=1),
         NoopLimiter(),  # type: ignore[arg-type]
         sleeper=sleeps.append,
     ) as client:
@@ -53,19 +49,17 @@ def test_http_client_retries_throttling_and_honors_retry_after():
 
 
 @respx.mock
-def test_http_client_raises_after_retry_budget_is_exhausted():
-    respx.get("https://example.test/jobs").mock(
-        return_value=httpx.Response(503)
-    )
-    settings = Settings(
-        SCRAPER_MAX_RETRIES=1,
-        SCRAPER_RETRY_BACKOFF_SECONDS=0,
+def test_http_client_does_not_retry_a_permanent_error():
+    route = respx.get("https://example.test/jobs").mock(
+        return_value=httpx.Response(404)
     )
 
     with ScraperHttpClient(
-        settings,
+        Settings(),
         NoopLimiter(),  # type: ignore[arg-type]
         sleeper=lambda _: None,
     ) as client:
         with pytest.raises(httpx.HTTPStatusError):
             client.get_text("https://example.test/jobs")
+
+    assert route.call_count == 1

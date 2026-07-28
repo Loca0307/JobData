@@ -13,24 +13,17 @@ Adapters exist for:
 - `swissdevjobs.ch`
 
 The two JobCloud adapters enumerate unfiltered listing pages until an empty or
-repeated page, including the source-specific query parameters needed to
-preserve pagination, and then read each job's public structured detail page.
-SwissDevJobs reads the RSS surface once and enriches each item from its public
-detail record. No title, location, skill, or profile filters are applied. All
-three adapters are enabled by default and require no project-specific
-authorization flag.
+repeated page and then read each job's public JobPosting JSON-LD. SwissDevJobs
+reads the RSS feed and each public embedded detail record. No title, location,
+skill, or profile filters are applied.
 
 Each DynamoDB `job_occurrence` stores canonical fields in the
 `normalized_job` map and the complete source evidence in the `raw_payload`
 map, with no second raw-payload copy nested inside the normalized data.
-The compact normalized map follows the neighboring JobFinder model: title,
-company, one location string, description, requirements, seniority,
-employment type, remote type, salary text, required languages, source and
-apply URLs, posting/scrape timestamps, and external source ID. More specialized
-publisher data—such as responsibilities, technologies, benefits, structured
-salary components, company metadata, and expiry/update dates—remains in
-`raw_payload`. A normalized field stays null or empty when the source does not
-publish it; in particular, the scraper does not estimate undisclosed salaries.
+The teaching-oriented adapters map only straightforward core fields such as
+title, company, location, description, work type, salary text, languages,
+URLs, dates, and source ID. Other publisher fields remain in `raw_payload`.
+Unknown values stay null or empty and undisclosed salaries are not estimated.
 
 The operator remains responsible for ensuring each enabled source may be
 collected in the intended jurisdiction and use case. The application does not
@@ -196,16 +189,16 @@ static credential variables and let boto3 use the role.
 “All jobs” means all distinct source IDs exposed by an enabled, implemented
 public listing surface during a successful run. It does not include
 authenticated, hidden, personalized, expired, or otherwise restricted records.
-Every JobCloud and SwissDevJobs occurrence also makes one detail request using
-the same per-source rate limit, so a complete run is deliberately much slower
-than summary-only collection.
+Every occurrence also makes one detail request using the same per-source rate
+limit, so a complete run is deliberately slower than summary-only collection.
 
 Re-running ingestion updates `last_seen_at`, provenance, content hash, and raw
 payload for an existing source ID. It does not create another occurrence.
 Records collected before detail enrichment remain summary-only until the next
 successful run updates them.
-Concurrent DynamoDB counter conflicts receive bounded retries with backoff;
-duplicate races remain idempotent, and other transaction cancellations fail
-the affected source visibly.
+HTTP retries, DynamoDB counter-conflict retries, and duplicate-race handling
+remain because they protect the source sites and stored counts. The surrounding
+parsing code is intentionally kept small enough to follow as a learning
+pipeline.
 Missing listings are not marked inactive after one run; a source-aware
 multi-run inactivity policy has not been implemented yet.

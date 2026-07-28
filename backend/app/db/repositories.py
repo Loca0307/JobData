@@ -18,6 +18,13 @@ _serializer = TypeSerializer()
 _deserializer = TypeDeserializer()
 _TRANSACTION_MAX_RETRIES = 5
 _TRANSACTION_RETRY_BASE_SECONDS = 0.05
+_UPDATE_OCCURRENCE_EXPRESSION = (
+    "SET last_seen_at = :last_seen_at, "
+    "last_run_id = :last_run_id, "
+    "content_hash = :content_hash, "
+    "normalized_job = :normalized, "
+    "raw_payload = :raw_payload"
+)
 
 
 class IngestionRepository(Protocol):
@@ -86,24 +93,8 @@ class DynamoIngestionRepository:
                 ":raw_payload": raw_payload,
             }
         )
-        try:
-            self._client.update_item(
-                TableName=self._table_name,
-                Key=_serialize_item(key),
-                ConditionExpression="attribute_exists(PK)",
-                UpdateExpression=(
-                    "SET last_seen_at = :last_seen_at, "
-                    "last_run_id = :last_run_id, "
-                    "content_hash = :content_hash, "
-                    "normalized_job = :normalized, "
-                    "raw_payload = :raw_payload"
-                ),
-                ExpressionAttributeValues=values,
-            )
+        if self._update_occurrence_if_present(key, values):
             return False
-        except ClientError as exc:
-            if not _is_conditional_failure(exc):
-                raise
 
         item = {
             **key,
@@ -143,25 +134,11 @@ class DynamoIngestionRepository:
                 return True
             except ClientError as exc:
                 if _is_transaction_condition_failure(exc):
-                    try:
-                        self._client.update_item(
-                            TableName=self._table_name,
-                            Key=_serialize_item(key),
-                            ConditionExpression="attribute_exists(PK)",
-                            UpdateExpression=(
-                                "SET last_seen_at = :last_seen_at, "
-                                "last_run_id = :last_run_id, "
-                                "content_hash = :content_hash, "
-                                "normalized_job = :normalized, "
-                                "raw_payload = :raw_payload"
-                            ),
-                            ExpressionAttributeValues=values,
-                        )
-                    except ClientError as update_exc:
-                        if _is_conditional_failure(update_exc):
-                            raise exc from update_exc
-                        raise
-                    return False
+                    # Another worker inserted this occurrence after our first
+                    # existence check. Updating the winner keeps counters exact.
+                    if self._update_occurrence_if_present(key, values):
+                        return False
+                    raise
                 if (
                     not _is_transaction_conflict(exc)
                     or attempt == _TRANSACTION_MAX_RETRIES
@@ -170,6 +147,26 @@ class DynamoIngestionRepository:
                 backoff = _TRANSACTION_RETRY_BASE_SECONDS * (2**attempt)
                 time.sleep(backoff + random.uniform(0, backoff))
         raise AssertionError("transaction retry loop terminated unexpectedly")
+
+    def _update_occurrence_if_present(
+        self,
+        key: dict[str, str],
+        values: dict[str, Any],
+    ) -> bool:
+        """Update one occurrence, returning False when it does not exist."""
+        try:
+            self._client.update_item(
+                TableName=self._table_name,
+                Key=_serialize_item(key),
+                ConditionExpression="attribute_exists(PK)",
+                UpdateExpression=_UPDATE_OCCURRENCE_EXPRESSION,
+                ExpressionAttributeValues=values,
+            )
+        except ClientError as exc:
+            if _is_conditional_failure(exc):
+                return False
+            raise
+        return True
 
     def finish_run(self, run: ScrapeRun) -> None:
         run_payload = run.model_dump(mode="json")
