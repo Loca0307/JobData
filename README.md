@@ -41,7 +41,7 @@ Create the table yourself with:
 
 The application never creates or mutates table configuration. Its AWS identity
 needs `dynamodb:DescribeTable`, `dynamodb:GetItem`,
-`dynamodb:BatchGetItem`, `dynamodb:Query`, `dynamodb:PutItem`,
+`dynamodb:BatchGetItem`, `dynamodb:Scan`, `dynamodb:PutItem`,
 `dynamodb:UpdateItem`, and
 `dynamodb:TransactWriteItems` on this table.
 
@@ -114,9 +114,18 @@ The ingestion POST creates a persisted run and returns `202 Accepted`
 immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES` in
 the background. Query the returned run ID to observe its status.
 
-The demand-map endpoint queries a bounded title/location index populated during
-ingestion. It returns recognized Swiss cities with coordinates and counts,
-along with explicit unmapped and truncated-result counts.
+The demand-map endpoint scans all normalized job occurrences and caches their
+title/location data in the backend for five minutes. Each role search filters
+the full cached data set. Common cities resolve locally; other city coordinates
+use the official Swiss geo.admin.ch location service and are cached in memory.
+The response includes explicit unmapped counts. The frontend shows only the map
+dots after a role is submitted; selecting a dot opens that location's job
+count in the details panel. The panel shows the total matches and an expandable
+job-count list for all cantons. No role is searched automatically on first
+load.
+
+The canton geometry is provided by the `swiss-maps` package from
+Bundesamt für Statistik (BFS), GEOSTAT data.
 
 Run backend checks:
 

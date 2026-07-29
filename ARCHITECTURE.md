@@ -6,7 +6,7 @@
 - boto3 and DynamoDB
 - HTTPX, Beautiful Soup, and Python XML ElementTree
 - pytest, respx, and Ruff
-- Next.js, React, TypeScript, and ESLint
+- Next.js, React, TypeScript, ESLint, D3 Geo, TopoJSON Client, and Swiss Maps
 - Docker and Docker Compose
 
 ## Job Collection
@@ -95,29 +95,39 @@
 - `backend/app/analysis/summary.py` calculates descriptive counts from any
   iterable of `NormalizedJob` objects. `backend/app/analysis/models.py`
   defines the typed summary and map outputs.
-- During each new or repeated ingestion,
-  `backend/app/db/repositories.py` extracts at most 12 normalized title terms
-  and transactionally upserts a minimal role/location item for each term.
-  Metadata on the job partition records the terms so obsolete entries can be
-  deleted when a title or location changes.
+- `backend/app/db/repositories.py` scans all normalized job occurrences,
+  projects only the normalized job and retained raw payload, and keeps the
+  resulting title/location list in memory for five minutes. A successful job
+  write invalidates the cache so the next request sees newly ingested data.
 - `GET /api/v1/analysis/demand-map?role=<role>` in
-  `backend/app/api/routes.py` queries the longest role term. It reads at most
-  1,000 candidates and never scans the table.
+  `backend/app/api/routes.py` filters the complete cached list for every role
+  search; it does not truncate the candidate set.
 - `backend/app/analysis/demand_map.py` verifies all requested title terms,
-  resolves common free-text Swiss locations with a small local city gazetteer,
-  and returns aggregated coordinates and counts. Unrecognized locations and
-  bounded/truncated results are reported explicitly.
+  supports word-prefix searches such as `medic` matching `medical`, and
+  aggregates matching jobs by resolved city.
+- `backend/app/analysis/geocoding.py` resolves common cities locally, then uses
+  the official Swiss geo.admin.ch location search for other city strings.
+  Distinct locations for one result are resolved with bounded concurrency, and
+  a bounded in-process LRU cache avoids repeated lookups. Coordinates are
+  accepted only inside a Swiss bounding box.
 - `frontend/lib/api.ts` retrieves the typed result.
+  `frontend/lib/swiss-map.ts` converts the published 2026 Swiss canton
+  TopoJSON into SVG paths and projects job coordinates through the same D3
+  geographic projection.
   `frontend/components/demand-map.tsx` renders it as a responsive inline SVG
-  map and an accessible ranked city list. `frontend/app/globals.css` contains
-  the map styling; no map tiles, browser geocoding, or client-side job dataset
-  are used.
-- An index write failure fails the affected ingestion source visibly. Repeating
-  ingestion is idempotent and repairs role/location entries. Existing stored
-  jobs become map-visible after their next ingestion.
+  map with keyboard-accessible dots and a details panel for the selected city.
+  The same canton polygons assign each mapped city to a canton for the
+  expandable canton-count list; the total uses every title match, including
+  jobs whose location could not be mapped.
+  `frontend/app/globals.css` contains the map styling; no map tiles, browser
+  geocoding, or client-side job dataset are used.
+- A DynamoDB scan failure is returned as an API failure and does not replace
+  the existing cache. A failed or invalid geocoding response leaves that job
+  explicitly unmapped rather than guessing a coordinate.
 - `backend/tests/test_analysis.py`, `backend/tests/test_repository.py`, and
-  `backend/tests/test_api.py` cover aggregation, location resolution, indexed
-  queries, index writes, and the API response.
+  `backend/tests/test_api.py` cover aggregation, cached geo.admin.ch location
+  resolution, partial role words, raw-location recovery, scan caching, and the
+  API response without live network access.
 
 ## Containers
 

@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from typing import Any
 
 from app.analysis.models import (
     DemandMapPoint,
@@ -24,8 +25,7 @@ class SwissLocation:
     aliases: tuple[str, ...] = ()
 
 
-# This compact gazetteer covers the main Swiss employment centres without
-# introducing a geocoding service, API key, or network dependency.
+# Common employment centres are resolved locally before the geocoding fallback.
 _SWISS_LOCATIONS = (
     SwissLocation("Zürich", 47.3769, 8.5417, ("zurich",)),
     SwissLocation("Geneva", 46.2044, 6.1432, ("geneve", "genf")),
@@ -36,7 +36,12 @@ _SWISS_LOCATIONS = (
     SwissLocation("Luzern", 47.0502, 8.3093, ("lucerne",)),
     SwissLocation("St. Gallen", 47.4245, 9.3767, ("st gallen", "sankt gallen")),
     SwissLocation("Lugano", 46.0037, 8.9511),
-    SwissLocation("Biel/Bienne", 47.1368, 7.2468, ("biel", "bienne")),
+    SwissLocation(
+        "Biel/Bienne",
+        47.1368,
+        7.2468,
+        ("biel", "bienne", "bielbienne"),
+    ),
     SwissLocation("Thun", 46.7580, 7.6280),
     SwissLocation("Fribourg", 46.8065, 7.1619, ("freiburg",)),
     SwissLocation("La Chaux-de-Fonds", 47.1035, 6.8328),
@@ -49,6 +54,10 @@ _SWISS_LOCATIONS = (
     SwissLocation("Solothurn", 47.2088, 7.5323),
     SwissLocation("Bellinzona", 46.1950, 9.0222),
     SwissLocation("Baden", 47.4738, 8.3072),
+    SwissLocation("Domat/Ems", 46.8347, 9.4503),
+    SwissLocation("Grand-Lancy", 46.1780, 6.1220),
+    SwissLocation("Degersheim", 47.3740, 9.1970),
+    SwissLocation("Alpnach", 46.9420, 8.2730),
 )
 
 
@@ -67,18 +76,20 @@ def build_demand_map(
     jobs: Iterable[IndexedJobLocation],
     *,
     is_truncated: bool = False,
+    location_resolver: Callable[[str], SwissLocation | None] | None = None,
 ) -> DemandMapResult:
     """Aggregate matching indexed jobs into recognized Swiss map points."""
-    required_terms = set(title_terms(role))
+    required_terms = title_terms(role)
     location_counts: Counter[SwissLocation] = Counter()
     matching_jobs = 0
     unmapped_jobs = 0
+    resolver = location_resolver or resolve_swiss_location
 
     for job in jobs:
-        if not required_terms.issubset(title_terms(job.title)):
+        if not _role_matches_title(required_terms, title_terms(job.title)):
             continue
         matching_jobs += 1
-        location = resolve_swiss_location(job.location)
+        location = resolver(job.location)
         if location is None:
             unmapped_jobs += 1
             continue
@@ -107,6 +118,11 @@ def build_demand_map(
     )
 
 
+def matches_role(role: str, title: str) -> bool:
+    """Return whether every requested role word matches a title word."""
+    return _role_matches_title(title_terms(role), title_terms(title))
+
+
 def resolve_swiss_location(value: str) -> SwissLocation | None:
     """Match common free-text job locations to a known Swiss city."""
     normalized = f" {_normalize_text(value)} "
@@ -117,6 +133,42 @@ def resolve_swiss_location(value: str) -> SwissLocation | None:
     return None
 
 
+def recover_location(raw_payload: dict[str, Any]) -> str | None:
+    """Recover a location retained by older records before normalization."""
+    listing = raw_payload.get("listing")
+    listing = listing if isinstance(listing, dict) else raw_payload
+    place = listing.get("place")
+    if isinstance(place, str) and place.strip():
+        return place.strip()
+
+    detail = raw_payload.get("detail")
+    if not isinstance(detail, dict):
+        return None
+
+    # JobCloud detail payloads use schema.org JobPosting addresses.
+    job_location = detail.get("jobLocation")
+    if isinstance(job_location, list):
+        job_location = next(
+            (item for item in job_location if isinstance(item, dict)),
+            {},
+        )
+    if isinstance(job_location, dict):
+        address = job_location.get("address")
+        if isinstance(address, dict):
+            location = _join_location_fields(
+                address,
+                ("postalCode", "addressLocality", "addressRegion"),
+            )
+            if location:
+                return location
+
+    # SwissDevJobs detail payloads keep these fields at the top level.
+    return _join_location_fields(
+        detail,
+        ("address", "postalCode", "actualCity"),
+    )
+
+
 def _normalize_text(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value.casefold())
     ascii_like = "".join(
@@ -125,3 +177,25 @@ def _normalize_text(value: str) -> str:
         if not unicodedata.combining(character)
     )
     return " ".join(_WORD_PATTERN.findall(ascii_like))
+
+
+def _join_location_fields(
+    payload: dict[str, Any],
+    fields: tuple[str, ...],
+) -> str | None:
+    values = [
+        str(payload[field]).strip()
+        for field in fields
+        if payload.get(field)
+    ]
+    return ", ".join(values) or None
+
+
+def _role_matches_title(
+    required_terms: tuple[str, ...],
+    job_terms: tuple[str, ...],
+) -> bool:
+    return all(
+        any(job_term.startswith(required_term) for job_term in job_terms)
+        for required_term in required_terms
+    )

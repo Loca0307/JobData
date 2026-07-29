@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import threading
 import time
 from datetime import UTC
 from decimal import Decimal
@@ -11,7 +12,7 @@ from typing import Any, Protocol
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
-from app.analysis.demand_map import title_terms
+from app.analysis.demand_map import recover_location
 from app.analysis.models import IndexedJobLocation
 from app.models.jobs import SourceRecord
 from app.models.runs import JobCounts, ScrapeRun, SourceRunResult
@@ -42,11 +43,7 @@ class IngestionRepository(Protocol):
 
     def get_counts(self, source_names: tuple[str, ...]) -> JobCounts: ...
 
-    def get_indexed_job_locations(
-        self,
-        role: str,
-        limit: int,
-    ) -> list[IndexedJobLocation]: ...
+    def get_cached_job_locations(self) -> list[IndexedJobLocation]: ...
 
 
 class DynamoIngestionRepository:
@@ -55,6 +52,9 @@ class DynamoIngestionRepository:
     def __init__(self, client: Any, table_name: str) -> None:
         self._client = client
         self._table_name = table_name
+        self._job_location_cache: tuple[IndexedJobLocation, ...] = ()
+        self._job_location_cache_expires_at = 0.0
+        self._job_location_cache_lock = threading.Lock()
 
     def create_run(self, run: ScrapeRun) -> None:
         item = {
@@ -83,6 +83,7 @@ class DynamoIngestionRepository:
         )
 
     def save_record(self, record: SourceRecord, run_id: str) -> bool:
+        self._job_location_cache_expires_at = 0.0
         now = record.normalized_job.scrape_timestamp.astimezone(UTC).isoformat()
         job_id = stable_job_id(record.source_name, record.source_job_id)
         key = {
@@ -102,7 +103,6 @@ class DynamoIngestionRepository:
             }
         )
         if self._update_occurrence_if_present(key, values):
-            self._sync_role_location_index(record, job_id)
             return False
 
         item = {
@@ -140,14 +140,12 @@ class DynamoIngestionRepository:
                     TransactItems=transaction_items,
                     ClientRequestToken=client_request_token,
                 )
-                self._sync_role_location_index(record, job_id)
                 return True
             except ClientError as exc:
                 if _is_transaction_condition_failure(exc):
                     # Another worker inserted this occurrence after our first
                     # existence check. Updating the winner keeps counters exact.
                     if self._update_occurrence_if_present(key, values):
-                        self._sync_role_location_index(record, job_id)
                         return False
                     raise
                 if (
@@ -158,84 +156,6 @@ class DynamoIngestionRepository:
                 backoff = _TRANSACTION_RETRY_BASE_SECONDS * (2**attempt)
                 time.sleep(backoff + random.uniform(0, backoff))
         raise AssertionError("transaction retry loop terminated unexpectedly")
-
-    def _sync_role_location_index(
-        self,
-        record: SourceRecord,
-        job_id: str,
-    ) -> None:
-        """Upsert queryable title terms and remove terms that became stale."""
-        metadata_key = {"PK": f"JOB#{job_id}", "SK": "ROLE_LOCATION_INDEX"}
-        response = self._client.get_item(
-            TableName=self._table_name,
-            Key=_serialize_item(metadata_key),
-            ConsistentRead=True,
-        )
-        existing_item = response.get("Item")
-        old_terms = (
-            set(_deserialize_item(existing_item).get("terms", []))
-            if existing_item
-            else set()
-        )
-        job = record.normalized_job
-        new_terms = (
-            set(title_terms(job.title))
-            if job.location and job.location.strip()
-            else set()
-        )
-
-        changes: list[dict[str, Any]] = [
-            {
-                "Delete": {
-                    "TableName": self._table_name,
-                    "Key": _serialize_item(
-                        {"PK": f"ROLE#{term}", "SK": f"JOB#{job_id}"}
-                    ),
-                }
-            }
-            for term in sorted(old_terms - new_terms)
-        ]
-        changes.extend(
-            {
-                "Put": {
-                    "TableName": self._table_name,
-                    "Item": _serialize_item(
-                        {
-                            "PK": f"ROLE#{term}",
-                            "SK": f"JOB#{job_id}",
-                            "entity_type": "role_location_index",
-                            "title": job.title,
-                            "location": job.location,
-                        }
-                    ),
-                }
-            }
-            for term in sorted(new_terms)
-        )
-        changes.append(
-            {
-                "Put": {
-                    "TableName": self._table_name,
-                    "Item": _serialize_item(
-                        {
-                            **metadata_key,
-                            "entity_type": "role_location_index_metadata",
-                            "terms": sorted(new_terms),
-                        }
-                    ),
-                }
-            }
-        )
-        index_hash = hashlib.sha256(
-            (
-                f"{job_id}\0{job.title}\0{job.location}\0"
-                f"{sorted(old_terms)}\0{sorted(new_terms)}"
-            ).encode()
-        ).hexdigest()
-        self._client.transact_write_items(
-            TransactItems=changes,
-            ClientRequestToken=index_hash[:36],
-        )
 
     def _update_occurrence_if_present(
         self,
@@ -373,48 +293,57 @@ class DynamoIngestionRepository:
             latest_run=latest_run,
         )
 
-    def get_indexed_job_locations(
-        self,
-        role: str,
-        limit: int,
-    ) -> list[IndexedJobLocation]:
-        terms = title_terms(role)
-        if not terms:
-            return []
+    def get_cached_job_locations(self) -> list[IndexedJobLocation]:
+        """Scan job occurrences once, then reuse them for five minutes."""
+        now = time.monotonic()
+        if now < self._job_location_cache_expires_at:
+            return list(self._job_location_cache)
 
-        # Querying the longest term usually selects fewer candidates. Any
-        # additional terms are checked by the analysis layer.
-        partition_term = terms[0]
-        items: list[IndexedJobLocation] = []
-        exclusive_start_key = None
-        while len(items) < limit:
-            request: dict[str, Any] = {
-                "TableName": self._table_name,
-                "KeyConditionExpression": "PK = :pk",
-                "ExpressionAttributeValues": _serialize_item(
-                    {":pk": f"ROLE#{partition_term}"}
-                ),
-                "Limit": limit - len(items),
-            }
-            if exclusive_start_key:
-                request["ExclusiveStartKey"] = exclusive_start_key
-            response = self._client.query(**request)
-            items.extend(
-                IndexedJobLocation.model_validate(
-                    {
-                        "title": item["title"],
-                        "location": item["location"],
-                    }
-                )
-                for item in (
-                    _deserialize_item(raw_item)
-                    for raw_item in response.get("Items", [])
-                )
-            )
-            exclusive_start_key = response.get("LastEvaluatedKey")
-            if not exclusive_start_key:
-                break
-        return items[:limit]
+        with self._job_location_cache_lock:
+            now = time.monotonic()
+            if now < self._job_location_cache_expires_at:
+                return list(self._job_location_cache)
+
+            jobs: list[IndexedJobLocation] = []
+            exclusive_start_key = None
+            while True:
+                request: dict[str, Any] = {
+                    "TableName": self._table_name,
+                    "FilterExpression": "entity_type = :entity_type",
+                    "ExpressionAttributeValues": _serialize_item(
+                        {":entity_type": "job_occurrence"}
+                    ),
+                    "ProjectionExpression": "normalized_job, raw_payload",
+                }
+                if exclusive_start_key:
+                    request["ExclusiveStartKey"] = exclusive_start_key
+                response = self._client.scan(**request)
+                for raw_item in response.get("Items", []):
+                    item = _deserialize_item(raw_item)
+                    normalized = item.get("normalized_job", {})
+                    title = normalized.get("title")
+                    location = normalized.get("location")
+                    if not isinstance(location, str) or not location.strip():
+                        raw_payload = item.get("raw_payload", {})
+                        location = (
+                            recover_location(raw_payload)
+                            if isinstance(raw_payload, dict)
+                            else None
+                        )
+                    if isinstance(title, str) and isinstance(location, str):
+                        jobs.append(
+                            IndexedJobLocation(
+                                title=title,
+                                location=location,
+                            )
+                        )
+                exclusive_start_key = response.get("LastEvaluatedKey")
+                if not exclusive_start_key:
+                    break
+
+            self._job_location_cache = tuple(jobs)
+            self._job_location_cache_expires_at = now + 300
+            return list(self._job_location_cache)
 
 
 def stable_job_id(source_name: str, source_job_id: str) -> str:

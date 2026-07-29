@@ -7,39 +7,39 @@ import {
   type DemandMapPoint,
   type DemandMapResult,
 } from "@/lib/api";
-
-const MAP_WIDTH = 800;
-const MAP_HEIGHT = 400;
-const MIN_LONGITUDE = 5.8;
-const MAX_LONGITUDE = 10.6;
-const MIN_LATITUDE = 45.75;
-const MAX_LATITUDE = 47.9;
+import {
+  jobsByCanton,
+  projectSwissCoordinates,
+  SWISS_MAP_HEIGHT,
+  SWISS_MAP_WIDTH,
+  swissCantonPaths,
+} from "@/lib/swiss-map";
 
 function project(point: DemandMapPoint) {
-  return {
-    x:
-      ((point.longitude - MIN_LONGITUDE) /
-        (MAX_LONGITUDE - MIN_LONGITUDE)) *
-      MAP_WIDTH,
-    y:
-      ((MAX_LATITUDE - point.latitude) /
-        (MAX_LATITUDE - MIN_LATITUDE)) *
-      MAP_HEIGHT,
-  };
+  return projectSwissCoordinates(point.longitude, point.latitude);
 }
 
 export function DemandMap() {
-  const [roleInput, setRoleInput] = useState("engineer");
-  const [role, setRole] = useState("engineer");
+  const [roleInput, setRoleInput] = useState("");
+  const [role, setRole] = useState("");
   const [result, setResult] = useState<DemandMapResult | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<DemandMapPoint | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [requestVersion, setRequestVersion] = useState(0);
 
   useEffect(() => {
+    if (!role) {
+      return;
+    }
     const controller = new AbortController();
     void fetchDemandMap(role, controller.signal)
-      .then(setResult)
+      .then((demandResult) => {
+        setResult(demandResult);
+        setSelectedPoint(null);
+      })
       .catch((loadError: unknown) => {
         if (
           loadError instanceof DOMException &&
@@ -67,6 +67,7 @@ export function DemandMap() {
     if (cleanedRole.length >= 2) {
       setIsLoading(true);
       setError(null);
+      setSelectedPoint(null);
       setRole(cleanedRole);
       setRequestVersion((version) => version + 1);
     }
@@ -76,6 +77,7 @@ export function DemandMap() {
     1,
     ...(result?.points.map((point) => point.job_count) ?? []),
   );
+  const cantonCounts = jobsByCanton(result?.points ?? []);
 
   return (
     <section className="demand-card" aria-labelledby="demand-map-heading">
@@ -114,23 +116,41 @@ export function DemandMap() {
         <div className="map-layout">
           <div className="swiss-map">
             <svg
-              viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+              viewBox={`0 0 ${SWISS_MAP_WIDTH} ${SWISS_MAP_HEIGHT}`}
               role="img"
-              aria-label={`Swiss job demand for ${role}`}
+              aria-label={
+                role
+                  ? `Swiss job demand for ${role}`
+                  : "Swiss job demand map"
+              }
             >
-              <path
-                className="country-shape"
-                d="M 26 329 L 49 288 L 32 242 L 97 167 L 122 102 L 252 74 L 292 52 L 438 19 L 478 47 L 600 56 L 640 93 L 608 158 L 762 195 L 713 260 L 616 298 L 535 385 L 486 335 L 389 344 L 324 363 L 211 335 L 146 298 L 65 316 Z"
-              />
-              {result?.points.map((point) => {
+              <g className="canton-map" aria-hidden="true">
+                {swissCantonPaths.map((canton) => (
+                  <path key={canton.id} d={canton.path} />
+                ))}
+              </g>
+              {[...(result?.points ?? [])].reverse().map((point) => {
                 const position = project(point);
                 const radius =
                   7 + Math.sqrt(point.job_count / largestCount) * 19;
                 return (
                   <g
-                    className="demand-point"
+                    className={`demand-point${
+                      selectedPoint?.name === point.name ? " selected" : ""
+                    }`}
                     key={point.name}
                     transform={`translate(${position.x} ${position.y})`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${point.name}: ${point.job_count} matching jobs`}
+                    aria-pressed={selectedPoint?.name === point.name}
+                    onClick={() => setSelectedPoint(point)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedPoint(point);
+                      }
+                    }}
                   >
                     <title>
                       {point.name}: {point.job_count} matching jobs
@@ -144,37 +164,48 @@ export function DemandMap() {
           </div>
 
           <aside className="map-summary" aria-live="polite">
-            <p className="map-role">{result?.role ?? role}</p>
-            <strong>{result?.mapped_jobs ?? 0}</strong>
-            <span>mapped matching jobs</span>
-            {result?.points.length ? (
-              <ol>
-                {result.points.map((point) => (
-                  <li key={point.name}>
-                    <span>{point.name}</span>
-                    <strong>{point.job_count}</strong>
-                  </li>
-                ))}
-              </ol>
+            <p className="map-role">
+              {result?.role || role || "Choose a role"}
+            </p>
+            {selectedPoint ? (
+              <>
+                <h3>{selectedPoint.name}</h3>
+                <strong>{selectedPoint.job_count}</strong>
+                <span>
+                  matching job{selectedPoint.job_count === 1 ? "" : "s"}
+                </span>
+                <small className="location-coordinates">
+                  {selectedPoint.latitude.toFixed(4)},{" "}
+                  {selectedPoint.longitude.toFixed(4)}
+                </small>
+              </>
             ) : (
               <p className="map-message">
                 {isLoading
                   ? "Loading demand…"
-                  : "No mapped jobs match this role yet."}
+                  : result?.points.length
+                    ? "Select a dot to see that location’s details."
+                    : role
+                      ? "No mapped jobs match this role yet."
+                      : "Enter a job field to load the demand map."}
               </p>
             )}
-            {result?.unmapped_jobs ? (
-              <small>
-                {result.unmapped_jobs} additional matching job
-                {result.unmapped_jobs === 1 ? "" : "s"} had an unrecognized
-                location.
-              </small>
-            ) : null}
-            {result?.is_truncated ? (
-              <small>
-                Results reached the 1,000-job safety limit; displayed demand is
-                a partial view.
-              </small>
+            {result ? (
+              <div className="map-total">
+                <span>Total jobs found</span>
+                <strong>{result.matching_jobs}</strong>
+                <details className="canton-breakdown">
+                  <summary>Jobs by canton</summary>
+                  <ul>
+                    {cantonCounts.map((canton) => (
+                      <li key={canton.id}>
+                        <span>{canton.name}</span>
+                        <strong>{canton.jobCount}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
             ) : null}
           </aside>
         </div>

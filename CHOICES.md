@@ -145,44 +145,59 @@
 - **Revisit when:** A concrete report or large-dataset access pattern is
   defined.
 
-## 10. Ingestion-Built Role and Location Index
+## 10. Cached Full-Table Analysis Scan
 
-- **Choice:** Store bounded title-term/location items during ingestion and
-  query them by DynamoDB partition key for map requests.
-- **Why:** The current table has no job-listing access index. This supports
-  arbitrary title words without scanning the job table or downloading all jobs
-  to the browser.
+- **Choice:** Scan all normalized job occurrences on a demand-map request,
+  retain their title/location data in the backend process for five minutes,
+  and filter that complete cached list for each role search.
+- **Why:** The map should reflect every stored job, including words in longer
+  titles. The short cache makes repeated searches cheap while keeping the
+  implementation and stored data model simple.
 - **Relevant files:** `backend/app/db/repositories.py`,
   `backend/app/analysis/demand_map.py`,
   `backend/app/api/routes.py`, and `backend/tests/test_repository.py`.
 - **Alternatives:**
-  - A DynamoDB scan is simpler to add but is inefficient and prohibited in
-    production request paths.
+  - A title-term DynamoDB index is cheaper to query at scale but adds write
+    amplification, migration work, and can omit records when indexing rules
+    change.
   - A search service supports richer full-text queries but adds infrastructure
     that the current use case does not justify.
   - Pre-aggregating only known roles is cheaper to query but prevents users
     from choosing their own title words.
-- **Constraints and risks:** Each job adds at most 12 small index items. A map
-  query examines at most 1,000 candidates and reports when that limit is
-  reached. Existing jobs require one repeat ingestion to populate the index.
-- **Revisit when:** Role queries regularly reach the safety limit or require
-  stemming, synonyms, or complex search.
+- **Constraints and risks:** DynamoDB charges for the full scan once per
+  five-minute cache window per backend process. Results may be stale for up to
+  five minutes, and the complete projected title/location set consumes backend
+  memory. The cache is invalidated by ingestion writes in the same process.
+- **Revisit when:** The table or number of backend processes makes scan cost,
+  latency, or memory use material. A purpose-built index or search service
+  would then be appropriate.
 
-## 11. Local Swiss Map and City Gazetteer
+## 11. Published Canton Geometry and Cached City Geocoding
 
-- **Choice:** Use a responsive inline SVG outline and a small server-side list
-  of major Swiss employment centres with multilingual aliases.
-- **Why:** It produces a useful first map without map tiles, API keys, browser
-  geocoding, or another frontend dependency.
+- **Choice:** Render the published 2026 Swiss Maps canton TopoJSON with D3 Geo
+  and TopoJSON Client, resolve common cities from a small server-side list, and
+  resolve other city strings through the official Swiss geo.admin.ch location
+  service with an in-memory LRU cache.
+- **Why:** The normalized records already contain city text. Server-side
+  cached resolution places small towns without sending job data to the browser.
+  Sharing one geographic projection between the canton geometry and dots keeps
+  them aligned and replaces the former approximate hand-drawn outline.
 - **Relevant files:** `backend/app/analysis/demand_map.py`,
+  `backend/app/analysis/geocoding.py`,
+  `frontend/lib/swiss-map.ts`,
   `frontend/components/demand-map.tsx`, and
   `frontend/app/globals.css`.
 - **Alternatives:**
-  - A map library provides pan, zoom, and detailed boundaries but adds weight
-    before those interactions are needed.
-  - An external geocoder recognizes more locations but introduces cost,
-    network availability, caching, and address-sharing concerns.
-- **Constraints and risks:** Unknown towns, broad regions, and remote-only
-  strings are reported as unmapped rather than guessed.
-- **Revisit when:** Unmapped locations materially distort analysis or the map
-  needs detailed geographic interaction.
+  - A static image is smaller to implement but makes it harder to guarantee
+    that longitude/latitude dots use the exact same projection.
+  - A full map library provides pan, zoom, and tiles but adds weight and
+    interaction that the current view does not need.
+  - A complete bundled Swiss municipality dataset removes the network
+    dependency but requires maintaining a larger local data asset.
+- **Constraints and risks:** The canton data and projection libraries add
+  frontend bundle weight and require the source attribution documented in
+  `README.md`. First-time resolution of an uncommon city depends on
+  geo.admin.ch availability. Only the normalized location string is sent.
+  Unknown towns, broad regions, and remote-only strings remain unmapped.
+- **Revisit when:** Offline operation is required, geocoder latency becomes
+  material, or the map needs detailed geographic interaction.

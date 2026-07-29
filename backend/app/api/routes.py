@@ -12,7 +12,8 @@ from fastapi import (
     status,
 )
 
-from app.analysis.demand_map import build_demand_map, title_terms
+from app.analysis.demand_map import build_demand_map, matches_role, title_terms
+from app.analysis.geocoding import resolve_cached_swiss_locations
 from app.analysis.models import DemandMapResult
 from app.core.settings import get_settings
 from app.db.dynamodb import get_dynamodb_client
@@ -71,12 +72,14 @@ def job_demand_map(
             status_code=422,
             detail="Role must contain at least one word",
         )
-    candidate_limit = 1_000
-    jobs = repository.get_indexed_job_locations(role, limit=candidate_limit)
+    jobs = repository.get_cached_job_locations()
+    locations = resolve_cached_swiss_locations(
+        job.location for job in jobs if matches_role(role, job.title)
+    )
     return build_demand_map(
         role,
         jobs,
-        is_truncated=len(jobs) == candidate_limit,
+        location_resolver=locations.get,
     )
 
 

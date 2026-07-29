@@ -1,4 +1,5 @@
-from app.analysis.demand_map import build_demand_map
+from app.analysis.demand_map import build_demand_map, recover_location
+from app.analysis.geocoding import resolve_cached_swiss_location
 from app.analysis.models import IndexedJobLocation
 from app.analysis.summary import analyze_jobs
 from app.models.jobs import NormalizedJob
@@ -113,3 +114,79 @@ def test_demand_map_filters_titles_and_groups_swiss_locations():
     assert [(point.name, point.job_count) for point in result.points] == [
         ("Zürich", 2)
     ]
+
+
+def test_demand_map_supports_partial_role_words():
+    jobs = [
+        IndexedJobLocation(title="Medical Assistant", location="Bern"),
+        IndexedJobLocation(title="Medicine Specialist", location="Zürich"),
+        IndexedJobLocation(title="Media Manager", location="Geneva"),
+    ]
+
+    result = build_demand_map("medic", jobs)
+
+    assert result.matching_jobs == 2
+    assert {point.name for point in result.points} == {"Bern", "Zürich"}
+
+
+def test_location_can_be_recovered_from_retained_listing_payload():
+    location = recover_location(
+        {
+            "listing": {
+                "title": "Data Engineer",
+                "place": "8000 Zürich",
+            }
+        }
+    )
+
+    assert location == "8000 Zürich"
+
+
+def test_engineer_locations_present_in_stored_data_are_mapped():
+    jobs = [
+        IndexedJobLocation(title="IT System Engineer", location="Domat/Ems"),
+        IndexedJobLocation(title="Backend Engineer", location="Grand-Lancy"),
+        IndexedJobLocation(title="System Engineer", location="Alpnach"),
+    ]
+
+    result = build_demand_map("engineer", jobs)
+
+    assert result.mapped_jobs == 3
+    assert {point.name for point in result.points} == {
+        "Alpnach",
+        "Domat/Ems",
+        "Grand-Lancy",
+    }
+
+
+def test_unknown_city_is_resolved_once_and_cached(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "results": [
+                    {
+                        "attrs": {
+                            "label": "<b>Prilly (VD)</b>",
+                            "lat": 46.5382,
+                            "lon": 6.6046,
+                        }
+                    }
+                ]
+            }
+
+    requests = []
+    monkeypatch.setattr(
+        "app.analysis.geocoding.httpx.get",
+        lambda *args, **kwargs: requests.append((args, kwargs)) or Response(),
+    )
+    resolve_cached_swiss_location.cache_clear()
+
+    first = resolve_cached_swiss_location("Prilly")
+    second = resolve_cached_swiss_location("Prilly")
+
+    assert first == second
+    assert first and first.name == "Prilly"
+    assert len(requests) == 1

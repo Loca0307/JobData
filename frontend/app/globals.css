@@ -389,17 +389,30 @@ dd {
   overflow: visible;
 }
 
-.country-shape {
+.canton-map path {
   fill: #fffdf8;
   stroke: #b9c9c0;
   stroke-linejoin: round;
-  stroke-width: 3;
+  stroke-width: 1.4;
 }
 
 .demand-point circle {
   fill: rgb(15 107 80 / 78%);
   stroke: white;
   stroke-width: 3;
+}
+
+.demand-point {
+  cursor: pointer;
+  outline: none;
+}
+
+.demand-point:hover circle,
+.demand-point:focus-visible circle,
+.demand-point.selected circle {
+  fill: var(--accent);
+  stroke: #ffd166;
+  stroke-width: 5;
 }
 
 .demand-point text {
@@ -423,6 +436,13 @@ dd {
   text-transform: capitalize;
 }
 
+.map-summary h3 {
+  margin: 8px 0 12px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.65rem;
+  font-weight: 500;
+}
+
 .map-summary > strong {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 4rem;
@@ -435,19 +455,48 @@ dd {
   color: var(--muted);
 }
 
-.map-summary ol {
+.location-coordinates {
+  margin-top: 8px;
+}
+
+.map-total {
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.map-total > span {
+  display: block;
+  color: var(--muted);
+}
+
+.map-total > strong {
+  display: block;
+  margin: 4px 0 14px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.5rem;
+  font-weight: 500;
+}
+
+.canton-breakdown summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.canton-breakdown ul {
   display: grid;
-  gap: 8px;
-  margin: 24px 0;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin: 14px 0 0;
   padding: 0;
   list-style: none;
 }
 
-.map-summary li {
+.canton-breakdown li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 8px;
+  gap: 8px;
+  padding-bottom: 5px;
   border-bottom: 1px solid var(--line);
 }
 

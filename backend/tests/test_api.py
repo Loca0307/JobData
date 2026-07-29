@@ -32,13 +32,7 @@ class StatsRepository:
             },
         )
 
-    def get_indexed_job_locations(
-        self,
-        role: str,
-        limit: int,
-    ) -> list[IndexedJobLocation]:
-        assert role == "engineer"
-        assert limit == 1_000
+    def get_cached_job_locations(self) -> list[IndexedJobLocation]:
         return [
             IndexedJobLocation(title="Data Engineer", location="Zürich"),
             IndexedJobLocation(title="Software Engineer", location="Geneva"),
