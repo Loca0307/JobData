@@ -180,11 +180,14 @@
   service with an in-memory LRU cache.
 - **Why:** The normalized records already contain city text. Server-side
   cached resolution places small towns without sending job data to the browser.
-  Sharing one geographic projection between the canton geometry and dots keeps
-  them aligned and replaces the former approximate hand-drawn outline.
+  Sharing one geographic projection between the canton geometry and city dots
+  keeps them aligned and replaces the former approximate hand-drawn outline.
+  The separate aggregated list shows full canton names and summed counts;
+  same-named cities are not presented as separate list rows.
 - **Relevant files:** `backend/app/analysis/demand_map.py`,
   `backend/app/analysis/geocoding.py`,
   `frontend/lib/swiss-map.ts`,
+  `frontend/lib/swiss-map.test.ts`,
   `frontend/components/demand-map.tsx`, and
   `frontend/app/globals.css`.
 - **Alternatives:**

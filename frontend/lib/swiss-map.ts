@@ -6,38 +6,19 @@ import type {
 } from "topojson-specification";
 import { feature } from "topojson-client";
 
-import swissTopologyData from "swiss-maps/2026/ch-combined.json";
+import swissTopologyData from "swiss-maps/2026/ch-combined.json" with {
+  type: "json",
+};
 
 export const SWISS_MAP_WIDTH = 800;
 export const SWISS_MAP_HEIGHT = 400;
 
 const CANTON_NAMES = [
-  "Zürich",
-  "Bern",
-  "Luzern",
-  "Uri",
-  "Schwyz",
-  "Obwalden",
-  "Nidwalden",
-  "Glarus",
-  "Zug",
-  "Fribourg",
-  "Solothurn",
-  "Basel-Stadt",
-  "Basel-Landschaft",
-  "Schaffhausen",
-  "Appenzell Ausserrhoden",
-  "Appenzell Innerrhoden",
-  "St. Gallen",
-  "Graubünden",
-  "Aargau",
-  "Thurgau",
-  "Ticino",
-  "Vaud",
-  "Valais",
-  "Neuchâtel",
-  "Geneva",
-  "Jura",
+  "Zürich", "Bern", "Luzern", "Uri", "Schwyz", "Obwalden", "Nidwalden",
+  "Glarus", "Zug", "Fribourg", "Solothurn", "Basel-Stadt",
+  "Basel-Landschaft", "Schaffhausen", "Appenzell Ausserrhoden",
+  "Appenzell Innerrhoden", "St. Gallen", "Graubünden", "Aargau", "Thurgau",
+  "Ticino", "Vaud", "Valais", "Neuchâtel", "Geneva", "Jura",
 ] as const;
 
 const topology = swissTopologyData as unknown as Topology<{

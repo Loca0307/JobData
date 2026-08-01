@@ -73,11 +73,11 @@ export function DemandMap() {
     }
   }
 
+  const cantonCounts = jobsByCanton(result?.points ?? []);
   const largestCount = Math.max(
     1,
     ...(result?.points.map((point) => point.job_count) ?? []),
   );
-  const cantonCounts = jobsByCanton(result?.points ?? []);
 
   return (
     <section className="demand-card" aria-labelledby="demand-map-heading">

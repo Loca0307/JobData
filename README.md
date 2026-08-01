@@ -118,11 +118,13 @@ The demand-map endpoint scans all normalized job occurrences and caches their
 title/location data in the backend for five minutes. Each role search filters
 the full cached data set. Common cities resolve locally; other city coordinates
 use the official Swiss geo.admin.ch location service and are cached in memory.
-The response includes explicit unmapped counts. The frontend shows only the map
-dots after a role is submitted; selecting a dot opens that location's job
-count in the details panel. The panel shows the total matches and an expandable
-job-count list for all cantons. No role is searched automatically on first
-load.
+The response includes explicit unmapped counts. The frontend shows city-level
+map dots after a role is submitted; selecting a dot opens that location's job
+count in the details panel. The expandable list separately assigns every
+mapped city to its containing canton, adds the city counts together, and labels
+each row with the canton's full name. City-level results remain on the map and
+are not separate rows in the canton list. No role is searched automatically on
+first load.
 
 The canton geometry is provided by the `swiss-maps` package from
 Bundesamt für Statistik (BFS), GEOSTAT data.

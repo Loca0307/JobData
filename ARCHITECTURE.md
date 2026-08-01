@@ -117,9 +117,13 @@
   `frontend/components/demand-map.tsx` renders it as a responsive inline SVG
   map with keyboard-accessible dots and a details panel for the selected city.
   The same canton polygons assign each mapped city to a canton for the
-  expandable canton-count list; the total uses every title match, including
-  jobs whose location could not be mapped.
-  `frontend/app/globals.css` contains the map styling; no map tiles, browser
+  expandable canton-only list. Its rows contain explicit full canton names and
+  summed counts, never separate city entries. The total uses every title match,
+  including jobs whose location could not be mapped.
+  `frontend/lib/swiss-map.test.ts`
+  verifies that separate cities in the same canton are added together and
+  that coordinates outside Switzerland are not assigned to a canton;
+  `frontend/app/globals.css` contains the map styling. No map tiles, browser
   geocoding, or client-side job dataset are used.
 - A DynamoDB scan failure is returned as an API failure and does not replace
   the existing cache. A failed or invalid geocoding response leaves that job
