@@ -1,0 +1,302 @@
+[
+  {
+    "key": "software_developer",
+    "english_terms": ["software developer", "software engineer", "programmer", "application developer"],
+    "aliases": {
+      "de": ["Softwareentwickler", "Softwareentwicklerin", "Programmierer", "Programmiererin", "Anwendungsentwickler", "Anwendungsentwicklerin"],
+      "en": ["software developer", "software engineer", "programmer", "application developer"],
+      "fr": ["développeur logiciel", "développeuse logiciel", "développeur de logiciels", "développeuse de logiciels", "ingénieur logiciel", "ingénieure logiciel", "programmeur", "programmeuse"],
+      "it": ["sviluppatore software", "sviluppatrice software", "ingegnere del software", "programmatore", "programmatrice"]
+    }
+  },
+  {
+    "key": "data_engineer",
+    "english_terms": ["data engineer", "data engineering"],
+    "aliases": {
+      "de": ["Dateningenieur", "Dateningenieurin"],
+      "en": ["data engineer", "data engineering"],
+      "fr": ["ingénieur des données", "ingénieure des données", "ingénieur data", "ingénieure data"],
+      "it": ["ingegnere dei dati", "ingegnera dei dati"]
+    }
+  },
+  {
+    "key": "project_manager",
+    "english_terms": ["project manager", "project lead"],
+    "aliases": {
+      "de": ["Projektleiter", "Projektleiterin", "Projektmanager", "Projektmanagerin"],
+      "en": ["project manager", "project lead"],
+      "fr": ["chef de projet", "cheffe de projet", "responsable de projet"],
+      "it": ["responsabile di progetto", "capo progetto"]
+    }
+  },
+  {
+    "key": "accountant",
+    "english_terms": ["accountant", "accounting"],
+    "aliases": {
+      "de": ["Buchhalter", "Buchhalterin", "Fachmann Finanz und Rechnungswesen", "Fachfrau Finanz und Rechnungswesen"],
+      "en": ["accountant", "accounting specialist"],
+      "fr": ["comptable", "spécialiste en comptabilité"],
+      "it": ["contabile", "specialista in contabilità"]
+    }
+  },
+  {
+    "key": "administrative_assistant",
+    "english_terms": ["administrative assistant", "office assistant", "administration"],
+    "aliases": {
+      "de": ["Administrativer Assistent", "Administrative Assistentin", "Verwaltungsassistent", "Verwaltungsassistentin", "Kaufmännischer Mitarbeiter", "Kaufmännische Mitarbeiterin"],
+      "en": ["administrative assistant", "office assistant", "administration assistant"],
+      "fr": ["assistant administratif", "assistante administrative", "employé administratif", "employée administrative"],
+      "it": ["assistente amministrativo", "assistente amministrativa", "impiegato amministrativo", "impiegata amministrativa"]
+    }
+  },
+  {
+    "key": "sales_representative",
+    "english_terms": ["sales representative", "sales consultant", "sales"],
+    "aliases": {
+      "de": ["Vertriebsmitarbeiter", "Vertriebsmitarbeiterin", "Verkaufsberater", "Verkaufsberaterin"],
+      "en": ["sales representative", "sales consultant", "sales advisor"],
+      "fr": ["représentant commercial", "représentante commerciale", "conseiller commercial", "conseillère commerciale"],
+      "it": ["rappresentante commerciale", "consulente commerciale"]
+    }
+  },
+  {
+    "key": "customer_service_representative",
+    "english_terms": ["customer service representative", "customer service", "customer support"],
+    "aliases": {
+      "de": ["Kundendienstmitarbeiter", "Kundendienstmitarbeiterin", "Kundenberater", "Kundenberaterin"],
+      "en": ["customer service representative", "customer service agent", "customer support specialist"],
+      "fr": ["conseiller clientèle", "conseillère clientèle", "agent de service client", "agente de service client"],
+      "it": ["addetto al servizio clienti", "addetta al servizio clienti", "consulente clienti"]
+    }
+  },
+  {
+    "key": "marketing_specialist",
+    "english_terms": ["marketing specialist", "marketing"],
+    "aliases": {
+      "de": ["Marketingfachmann", "Marketingfachfrau", "Marketing Spezialist", "Marketing Spezialistin"],
+      "en": ["marketing specialist", "marketing professional"],
+      "fr": ["spécialiste marketing", "chargé de marketing", "chargée de marketing"],
+      "it": ["specialista marketing", "addetto marketing", "addetta marketing"]
+    }
+  },
+  {
+    "key": "human_resources_specialist",
+    "english_terms": ["human resources specialist", "hr specialist", "human resources"],
+    "aliases": {
+      "de": ["Personalfachmann", "Personalfachfrau", "HR Fachmann", "HR Fachfrau"],
+      "en": ["human resources specialist", "hr specialist", "people specialist"],
+      "fr": ["spécialiste ressources humaines", "spécialiste RH", "chargé des ressources humaines", "chargée des ressources humaines"],
+      "it": ["specialista risorse umane", "addetto risorse umane", "addetta risorse umane"]
+    }
+  },
+  {
+    "key": "nurse",
+    "english_terms": ["nurse", "nursing"],
+    "aliases": {
+      "de": ["Pflegefachmann", "Pflegefachfrau", "Krankenpfleger", "Krankenschwester"],
+      "en": ["nurse", "registered nurse", "nursing professional"],
+      "fr": ["infirmier", "infirmière", "infirmier diplômé", "infirmière diplômée"],
+      "it": ["infermiere", "infermiera", "infermiere diplomato", "infermiera diplomata"]
+    }
+  },
+  {
+    "key": "healthcare_assistant",
+    "english_terms": ["healthcare assistant", "health care assistant", "care assistant"],
+    "aliases": {
+      "de": ["Fachmann Gesundheit", "Fachfrau Gesundheit", "Pflegeassistent", "Pflegeassistentin"],
+      "en": ["healthcare assistant", "health care assistant", "care assistant"],
+      "fr": ["aide soignant", "aide soignante", "assistant en soins", "assistante en soins"],
+      "it": ["operatore sociosanitario", "operatrice sociosanitaria", "assistente di cura"]
+    }
+  },
+  {
+    "key": "physician",
+    "english_terms": ["physician", "medical doctor", "doctor"],
+    "aliases": {
+      "de": ["Arzt", "Ärztin", "Mediziner", "Medizinerin"],
+      "en": ["physician", "medical doctor"],
+      "fr": ["médecin", "docteur en médecine", "docteure en médecine"],
+      "it": ["medico", "medica", "dottore in medicina", "dottoressa in medicina"]
+    }
+  },
+  {
+    "key": "pharmacist",
+    "english_terms": ["pharmacist", "pharmacy"],
+    "aliases": {
+      "de": ["Apotheker", "Apothekerin"],
+      "en": ["pharmacist", "pharmacy professional"],
+      "fr": ["pharmacien", "pharmacienne"],
+      "it": ["farmacista"]
+    }
+  },
+  {
+    "key": "teacher",
+    "english_terms": ["teacher", "educator", "teaching"],
+    "aliases": {
+      "de": ["Lehrer", "Lehrerin", "Lehrperson"],
+      "en": ["teacher", "educator", "teaching professional"],
+      "fr": ["enseignant", "enseignante", "professeur", "professeure"],
+      "it": ["insegnante", "docente"]
+    }
+  },
+  {
+    "key": "social_worker",
+    "english_terms": ["social worker", "social work"],
+    "aliases": {
+      "de": ["Sozialarbeiter", "Sozialarbeiterin", "Sozialpädagoge", "Sozialpädagogin"],
+      "en": ["social worker", "social work professional"],
+      "fr": ["assistant social", "assistante sociale", "travailleur social", "travailleuse sociale"],
+      "it": ["assistente sociale", "operatore sociale", "operatrice sociale"]
+    }
+  },
+  {
+    "key": "chef",
+    "english_terms": ["chef", "cook", "cooking"],
+    "aliases": {
+      "de": ["Koch", "Köchin", "Chefkoch", "Chefköchin"],
+      "en": ["chef", "cook", "head chef"],
+      "fr": ["cuisinier", "cuisinière", "chef de cuisine", "cheffe de cuisine"],
+      "it": ["cuoco", "cuoca", "capocuoco", "capocuoca"]
+    }
+  },
+  {
+    "key": "waiter",
+    "english_terms": ["waiter", "waitress", "waiting staff", "restaurant service"],
+    "aliases": {
+      "de": ["Kellner", "Kellnerin", "Servicemitarbeiter Gastronomie", "Servicemitarbeiterin Gastronomie"],
+      "en": ["waiter", "waitress", "waiting staff", "restaurant server"],
+      "fr": ["serveur", "serveuse", "employé de service", "employée de service"],
+      "it": ["cameriere", "cameriera", "addetto di sala", "addetta di sala"]
+    }
+  },
+  {
+    "key": "retail_salesperson",
+    "english_terms": ["retail salesperson", "retail sales", "shop assistant"],
+    "aliases": {
+      "de": ["Detailhandelsfachmann", "Detailhandelsfachfrau", "Verkäufer", "Verkäuferin"],
+      "en": ["retail salesperson", "retail sales assistant", "shop assistant"],
+      "fr": ["vendeur", "vendeuse", "employé de commerce de détail", "employée de commerce de détail"],
+      "it": ["commesso", "commessa", "impiegato del commercio al dettaglio", "impiegata del commercio al dettaglio"]
+    }
+  },
+  {
+    "key": "warehouse_worker",
+    "english_terms": ["warehouse worker", "warehouse operative", "warehouse"],
+    "aliases": {
+      "de": ["Lagermitarbeiter", "Lagermitarbeiterin", "Lagerist", "Lageristin"],
+      "en": ["warehouse worker", "warehouse operative", "warehouse associate"],
+      "fr": ["magasinier", "magasinière", "employé d'entrepôt", "employée d'entrepôt"],
+      "it": ["magazziniere", "magazziniera", "addetto al magazzino", "addetta al magazzino"]
+    }
+  },
+  {
+    "key": "logistics_specialist",
+    "english_terms": ["logistics specialist", "logistics", "logistician"],
+    "aliases": {
+      "de": ["Logistiker", "Logistikerin", "Logistikfachmann", "Logistikfachfrau"],
+      "en": ["logistics specialist", "logistics professional", "logistician"],
+      "fr": ["logisticien", "logisticienne", "spécialiste en logistique"],
+      "it": ["specialista in logistica", "operatore logistico", "operatrice logistica"]
+    }
+  },
+  {
+    "key": "delivery_driver",
+    "english_terms": ["delivery driver", "courier", "delivery"],
+    "aliases": {
+      "de": ["Kurierfahrer", "Kurierfahrerin", "Zusteller", "Zustellerin"],
+      "en": ["delivery driver", "courier driver", "courier"],
+      "fr": ["livreur", "livreuse", "chauffeur livreur", "chauffeuse livreuse"],
+      "it": ["corriere", "autista per consegne"]
+    }
+  },
+  {
+    "key": "truck_driver",
+    "english_terms": ["truck driver", "lorry driver", "heavy goods driver"],
+    "aliases": {
+      "de": ["Lastwagenfahrer", "Lastwagenfahrerin", "LKW Fahrer", "LKW Fahrerin"],
+      "en": ["truck driver", "lorry driver", "heavy goods vehicle driver"],
+      "fr": ["chauffeur poids lourd", "chauffeuse poids lourd", "conducteur de camion", "conductrice de camion"],
+      "it": ["camionista", "autista di camion"]
+    }
+  },
+  {
+    "key": "electrician",
+    "english_terms": ["electrician", "electrical installer"],
+    "aliases": {
+      "de": ["Elektriker", "Elektrikerin", "Elektroinstallateur", "Elektroinstallateurin"],
+      "en": ["electrician", "electrical installer"],
+      "fr": ["électricien", "électricienne", "installateur électricien", "installatrice électricienne"],
+      "it": ["elettricista", "installatore elettrico", "installatrice elettrica"]
+    }
+  },
+  {
+    "key": "plumber",
+    "english_terms": ["plumber", "plumbing", "sanitary installer"],
+    "aliases": {
+      "de": ["Sanitärinstallateur", "Sanitärinstallateurin", "Sanitärmonteur", "Sanitärmonteurin"],
+      "en": ["plumber", "plumbing technician", "sanitary installer"],
+      "fr": ["plombier", "plombière", "installateur sanitaire", "installatrice sanitaire"],
+      "it": ["idraulico", "idraulica", "installatore sanitario", "installatrice sanitaria"]
+    }
+  },
+  {
+    "key": "carpenter",
+    "english_terms": ["carpenter", "joiner", "carpentry"],
+    "aliases": {
+      "de": ["Schreiner", "Schreinerin", "Zimmermann", "Zimmerin"],
+      "en": ["carpenter", "joiner", "carpentry professional"],
+      "fr": ["menuisier", "menuisière", "charpentier", "charpentière"],
+      "it": ["falegname", "carpentiere", "carpentiera"]
+    }
+  },
+  {
+    "key": "automotive_mechanic",
+    "english_terms": ["automotive mechanic", "car mechanic", "vehicle mechanic"],
+    "aliases": {
+      "de": ["Automechaniker", "Automechanikerin", "Automobil Mechatroniker", "Automobil Mechatronikerin"],
+      "en": ["automotive mechanic", "car mechanic", "vehicle mechanic"],
+      "fr": ["mécanicien automobile", "mécanicienne automobile", "mécanicien sur automobiles", "mécanicienne sur automobiles"],
+      "it": ["meccanico d'auto", "meccanica d'auto", "meccanico di automobili", "meccanica di automobili"]
+    }
+  },
+  {
+    "key": "construction_worker",
+    "english_terms": ["construction worker", "construction labourer", "building worker"],
+    "aliases": {
+      "de": ["Bauarbeiter", "Bauarbeiterin", "Bauhilfsarbeiter", "Bauhilfsarbeiterin"],
+      "en": ["construction worker", "construction labourer", "building worker"],
+      "fr": ["ouvrier du bâtiment", "ouvrière du bâtiment", "manoeuvre de chantier"],
+      "it": ["operaio edile", "operaia edile", "manovale edile"]
+    }
+  },
+  {
+    "key": "cleaner",
+    "english_terms": ["cleaner", "cleaning", "housekeeping"],
+    "aliases": {
+      "de": ["Reinigungskraft", "Gebäudereiniger", "Gebäudereinigerin", "Raumpfleger", "Raumpflegerin"],
+      "en": ["cleaner", "cleaning operative", "housekeeping attendant"],
+      "fr": ["agent d'entretien", "agente d'entretien", "employé de nettoyage", "employée de nettoyage"],
+      "it": ["addetto alle pulizie", "addetta alle pulizie", "operatore di pulizia", "operatrice di pulizia"]
+    }
+  },
+  {
+    "key": "security_guard",
+    "english_terms": ["security guard", "security officer", "security"],
+    "aliases": {
+      "de": ["Sicherheitsmitarbeiter", "Sicherheitsmitarbeiterin", "Wachmann", "Wachfrau"],
+      "en": ["security guard", "security officer", "security agent"],
+      "fr": ["agent de sécurité", "agente de sécurité", "vigile"],
+      "it": ["addetto alla sicurezza", "addetta alla sicurezza", "guardia di sicurezza"]
+    }
+  },
+  {
+    "key": "production_worker",
+    "english_terms": ["production worker", "production operative", "manufacturing worker"],
+    "aliases": {
+      "de": ["Produktionsmitarbeiter", "Produktionsmitarbeiterin", "Produktionsarbeiter", "Produktionsarbeiterin"],
+      "en": ["production worker", "production operative", "manufacturing worker"],
+      "fr": ["agent de production", "agente de production", "ouvrier de production", "ouvrière de production"],
+      "it": ["operatore di produzione", "operatrice di produzione", "addetto alla produzione", "addetta alla produzione"]
+    }
+  }
+]

@@ -29,6 +29,7 @@ class IndexedJobLocation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str
+    search_title: str | None = None
     location: str
 
 

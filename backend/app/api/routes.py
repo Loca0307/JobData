@@ -74,7 +74,9 @@ def job_demand_map(
         )
     jobs = repository.get_cached_job_locations()
     locations = resolve_cached_swiss_locations(
-        job.location for job in jobs if matches_role(role, job.title)
+        job.location
+        for job in jobs
+        if matches_role(role, job.search_title or job.title)
     )
     return build_demand_map(
         role,

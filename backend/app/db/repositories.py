@@ -14,6 +14,7 @@ from botocore.exceptions import ClientError
 
 from app.analysis.demand_map import recover_location
 from app.analysis.models import IndexedJobLocation
+from app.analysis.title_aliases import expand_search_title
 from app.models.jobs import SourceRecord
 from app.models.runs import JobCounts, ScrapeRun, SourceRunResult
 
@@ -334,6 +335,7 @@ class DynamoIngestionRepository:
                         jobs.append(
                             IndexedJobLocation(
                                 title=title,
+                                search_title=expand_search_title(title),
                                 location=location,
                             )
                         )

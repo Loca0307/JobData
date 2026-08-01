@@ -86,8 +86,8 @@ export function DemandMap() {
           <p className="eyebrow">Role demand</p>
           <h2 id="demand-map-heading">Where are the jobs?</h2>
           <p>
-            Search a job-title word to compare demand across recognized Swiss
-            cities.
+            Search in English to compare demand across recognized Swiss cities.
+            Common German, French, and Italian job titles are included.
           </p>
         </div>
         <form className="role-filter" onSubmit={applyFilter}>

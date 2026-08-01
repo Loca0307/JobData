@@ -97,14 +97,20 @@
   defines the typed summary and map outputs.
 - `backend/app/db/repositories.py` scans all normalized job occurrences,
   projects only the normalized job and retained raw payload, and keeps the
-  resulting title/location list in memory for five minutes. A successful job
-  write invalidates the cache so the next request sees newly ingested data.
+  resulting title/location list in memory for five minutes. While constructing
+  that projection, `backend/app/analysis/title_aliases.py` appends reviewed
+  English search terms for whole German, French, Italian, or English title
+  aliases from `backend/app/analysis/data/job_title_aliases.json`. Stored and
+  displayed source titles are never changed. A successful job write invalidates
+  the cache so the next request sees newly ingested data.
 - `GET /api/v1/analysis/demand-map?role=<role>` in
   `backend/app/api/routes.py` filters the complete cached list for every role
   search; it does not truncate the candidate set.
-- `backend/app/analysis/demand_map.py` verifies all requested title terms,
-  supports word-prefix searches such as `medic` matching `medical`, and
-  aggregates matching jobs by resolved city.
+- `backend/app/analysis/demand_map.py` normalizes aliases and queries with the
+  same Unicode, accent, punctuation, and whitespace rules. It verifies all
+  requested English terms against each expanded search title, supports word
+  prefixes such as `medic` matching `medical`, and aggregates matches by city.
+  Unknown titles retain literal matching against the original source title.
 - `backend/app/analysis/geocoding.py` resolves common cities locally, then uses
   the official Swiss geo.admin.ch location search for other city strings.
   Distinct locations for one result are resolved with bounded concurrency, and
@@ -128,10 +134,12 @@
 - A DynamoDB scan failure is returned as an API failure and does not replace
   the existing cache. A failed or invalid geocoding response leaves that job
   explicitly unmapped rather than guessing a coordinate.
-- `backend/tests/test_analysis.py`, `backend/tests/test_repository.py`, and
-  `backend/tests/test_api.py` cover aggregation, cached geo.admin.ch location
-  resolution, partial role words, raw-location recovery, scan caching, and the
-  API response without live network access.
+- `backend/tests/test_title_aliases.py`, `backend/tests/test_analysis.py`,
+  `backend/tests/test_repository.py`, and `backend/tests/test_api.py` cover
+  catalog validation, multilingual and whole-phrase matching, literal fallback,
+  aggregation, geocoding, scan caching, and the unchanged API response without
+  live network access. A malformed bundled catalog fails the projection build
+  rather than silently disabling multilingual search.
 
 ## Containers
 

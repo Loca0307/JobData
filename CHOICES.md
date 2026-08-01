@@ -204,3 +204,34 @@
   Unknown towns, broad regions, and remote-only strings remain unmapped.
 - **Revisit when:** Offline operation is required, geocoder latency becomes
   material, or the map needs detailed geographic interaction.
+
+## 12. Reviewed Local Job-Title Aliases
+
+- **Choice:** Expand the existing five-minute analysis projection with English
+  search terms from a bundled catalog of 30 reviewed German, French, Italian,
+  and English job-title families. Match aliases only as normalized whole words
+  or phrases and retain the existing word-prefix search over the expansion.
+- **Why:** This gives common multilingual titles useful English search behavior
+  without changing stored or displayed titles, requiring re-ingestion, calling
+  a billable service, or operating a taxonomy importer. Applying the catalog
+  during cache construction also makes existing DynamoDB items work immediately.
+- **Relevant files:** `backend/app/analysis/title_aliases.py`,
+  `backend/app/analysis/data/job_title_aliases.json`,
+  `backend/app/db/repositories.py`, and
+  `backend/tests/test_title_aliases.py`.
+- **Alternatives:**
+  - Amazon Translate or another hosted translator covers arbitrary titles but
+    needs credentials, quotas, network access, and potentially billable usage.
+  - ESCO provides a much broader taxonomy but adds importer, refresh, review,
+    persistence, and query-resolution complexity.
+  - Offline neural translation avoids service charges but increases container
+    size, memory use, model downloads, and deployment maintenance.
+  - Semantic embeddings improve recall but add opaque matching and unnecessary
+    infrastructure for the current short-title search.
+- **Constraints and risks:** The list is a practical starter catalog, not an
+  official ranking or a full translation system. Unlisted titles fall back to
+  literal matching, Romansh is not covered, and maintainers must review aliases
+  before adding them. A process restart or cache rebuild is required after a
+  catalog deployment.
+- **Revisit when:** Measured misses justify a larger reviewed catalog or the
+  operational value of arbitrary translation outweighs its cost and complexity.

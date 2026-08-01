@@ -64,7 +64,7 @@ _SWISS_LOCATIONS = (
 def title_terms(value: str) -> tuple[str, ...]:
     """Return bounded, normalized title words used as DynamoDB query keys."""
     terms = {
-        _normalize_text(term)
+        normalize_search_text(term)
         for term in _WORD_PATTERN.findall(value)
         if len(term) >= 2
     }
@@ -86,7 +86,10 @@ def build_demand_map(
     resolver = location_resolver or resolve_swiss_location
 
     for job in jobs:
-        if not _role_matches_title(required_terms, title_terms(job.title)):
+        if not _role_matches_title(
+            required_terms,
+            title_terms(job.search_title or job.title),
+        ):
             continue
         matching_jobs += 1
         location = resolver(job.location)
@@ -125,10 +128,12 @@ def matches_role(role: str, title: str) -> bool:
 
 def resolve_swiss_location(value: str) -> SwissLocation | None:
     """Match common free-text job locations to a known Swiss city."""
-    normalized = f" {_normalize_text(value)} "
+    normalized = f" {normalize_search_text(value)} "
     for location in _SWISS_LOCATIONS:
         names = (location.name, *location.aliases)
-        if any(f" {_normalize_text(name)} " in normalized for name in names):
+        if any(
+            f" {normalize_search_text(name)} " in normalized for name in names
+        ):
             return location
     return None
 
@@ -169,7 +174,8 @@ def recover_location(raw_payload: dict[str, Any]) -> str | None:
     )
 
 
-def _normalize_text(value: str) -> str:
+def normalize_search_text(value: str) -> str:
+    """Normalize user queries, job titles, and aliases identically."""
     decomposed = unicodedata.normalize("NFKD", value.casefold())
     ascii_like = "".join(
         character

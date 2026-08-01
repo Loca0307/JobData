@@ -187,6 +187,19 @@ def test_repository_scans_job_locations_once_then_uses_cache():
     assert len(client.scans) == 1
 
 
+def test_repository_expands_existing_multilingual_title_for_search():
+    existing_job = make_record().normalized_job.model_copy(
+        update={"title": "Softwareentwicklerin"}
+    )
+    client = RecordingClient(scan_jobs=[existing_job])
+    repository = DynamoIngestionRepository(client, "JobData")
+
+    indexed = repository.get_cached_job_locations()[0]
+
+    assert indexed.title == "Softwareentwicklerin"
+    assert "software developer" in indexed.search_title
+
+
 class RecordingClient:
     def __init__(
         self,

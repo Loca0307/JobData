@@ -87,6 +87,28 @@ Configure the collector:
 | `SCRAPER_SOURCE_MAX_WORKERS` | `3` | Parallel source workers |
 | `API_CORS_ORIGINS` | `http://localhost:3000` | Allowed dashboard origins |
 
+### Multilingual title search
+
+Enter role searches in English. The backend keeps every job title exactly as
+published, but its five-minute analysis cache adds English search terms for a
+reviewed starter catalog of 30 common job families. Whole German, French,
+Italian, and English title phrases are supported. Matching ignores casing,
+accents, punctuation, and repeated whitespace; the existing word-prefix search
+then supports queries such as `plumb` for `plumber`.
+
+There is no translation API, model download, configuration, or DynamoDB
+migration. Existing jobs gain the behavior after the backend restarts or its
+analysis cache is rebuilt. Unlisted titles use the original literal-title
+search, so this is intentionally not a general translation system and does not
+currently cover Romansh.
+
+Maintainers extend `backend/app/analysis/data/job_title_aliases.json` by adding
+reviewed whole-title phrases to the appropriate language list. Every family
+must contain non-empty `de`, `en`, `fr`, and `it` lists. Keys must be unique,
+and the same normalized alias cannot belong to different families. Run the
+backend tests before deploying catalog changes; malformed catalogs fail loudly
+instead of silently disabling matching.
+
 Run one complete ingestion:
 
 ```bash
@@ -115,8 +137,9 @@ immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES` in
 the background. Query the returned run ID to observe its status.
 
 The demand-map endpoint scans all normalized job occurrences and caches their
-title/location data in the backend for five minutes. Each role search filters
-the full cached data set. Common cities resolve locally; other city coordinates
+title/location data plus local English search terms in the backend for five
+minutes. Each English role search filters the full cached data set. Common
+cities resolve locally; other city coordinates
 use the official Swiss geo.admin.ch location service and are cached in memory.
 The response includes explicit unmapped counts. The frontend shows city-level
 map dots after a role is submitted; selecting a dot opens that location's job
@@ -163,9 +186,9 @@ npm run build
 The dashboard reads aggregate counts and run status through FastAPI. “Run all
 scrapers” starts every enabled adapter, polls the returned run ID, and refreshes
 the totals when the run finishes. The role-demand map plots recognized Swiss
-cities from the bounded ingestion-built index without downloading all jobs or
-using an external map service. Existing jobs appear on the map after their next
-ingestion. The frontend never connects to DynamoDB directly.
+cities from the bounded backend cache without downloading all jobs or using an
+external map service. Existing jobs appear after the cache is rebuilt; no
+re-ingestion is required. The frontend never connects to DynamoDB directly.
 
 ## Docker Compose
 
