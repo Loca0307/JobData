@@ -1,8 +1,9 @@
 # JobData
 
 Private, data-first ingestion for Swiss job-market experiments. The repository
-contains three unfiltered source adapters, an idempotent DynamoDB pipeline,
-FastAPI operational endpoints, and a basic Next.js count dashboard.
+contains unfiltered job-board adapters, reusable company ATS adapters, an
+idempotent DynamoDB pipeline, FastAPI operational endpoints, and a basic
+Next.js count dashboard.
 
 ## Source status
 
@@ -11,6 +12,7 @@ Adapters exist for:
 - `jobs.ch`
 - `jobup.ch`
 - `swissdevjobs.ch`
+- configured company career sites using Greenhouse or Lever
 
 The two JobCloud adapters enumerate unfiltered listing pages until an empty or
 repeated page and then read each job's public JobPosting JSON-LD. SwissDevJobs
@@ -24,6 +26,54 @@ The teaching-oriented adapters map only straightforward core fields such as
 title, company, location, description, work type, salary text, languages,
 URLs, dates, and source ID. Other publisher fields remain in `raw_payload`.
 Unknown values stay null or empty and undisclosed salaries are not estimated.
+
+### Company career sites
+
+Company careers pages often publish their vacancies through an applicant
+tracking system (ATS). JobData supports the public Greenhouse Job Board API and
+the public Lever Postings API. It creates one scraper per configured company,
+so each company has its own run result and stable source name. It does not
+auto-detect ATS platforms or fall back to browser automation.
+
+The versioned catalog is
+`backend/app/scrapers/company_targets.json`. It contains the reviewed Swiss
+test targets and can be extended using the fields for each ATS:
+
+```json
+{
+  "targets": [
+    {
+      "id": "example-greenhouse",
+      "company_name": "Example Greenhouse AG",
+      "careers_url": "https://example.com/careers",
+      "ats": "greenhouse",
+      "board_token": "example"
+    },
+    {
+      "id": "example-lever",
+      "company_name": "Example Lever AG",
+      "careers_url": "https://example.org/jobs",
+      "ats": "lever",
+      "site": "example",
+      "region": "eu"
+    }
+  ]
+}
+```
+
+The `id` must remain stable because it produces the source name, for example
+`company:example-greenhouse`. Enable that exact name in
+`SCRAPER_ENABLED_SOURCES`. Greenhouse's `board_token` is the segment used by
+its public board URL. Lever's `site` is its public site token and `region` is
+either `global` or `eu`. The application validates every catalog entry before
+starting a run. Use `SCRAPER_COMPANY_TARGETS_FILE` only when a deployment needs
+a different catalog path.
+
+Each ATS response is normalized into the existing common job fields while the
+complete source object and target configuration are retained in `raw_payload`.
+Greenhouse prospect/general-interest posts are excluded. Lever pagination is
+bounded and repeated pages fail loudly. Authenticated, blocked, or unsupported
+career systems remain unsupported rather than being bypassed.
 
 The operator remains responsible for ensuring each enabled source may be
 collected in the intended jurisdiction and use case. The application does not
@@ -52,8 +102,13 @@ export AWS_REGION="eu-south-1"
 export DYNAMODB_TABLE_NAME="JobData"
 ```
 
-The normal AWS credential provider chain is used. Never commit AWS credentials
-or expose them to the frontend.
+For local development, the backend reads these settings from the project-root
+`.env` regardless of whether the command starts in the root or `backend/`
+directory. It also loads that file without overriding variables already
+exported by the shell, allowing boto3's normal AWS credential provider chain to
+use local `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and optional
+`AWS_SESSION_TOKEN` values. Never commit AWS credentials or expose them to the
+frontend.
 
 ## Backend
 
@@ -76,7 +131,8 @@ Configure the collector:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `SCRAPER_ENABLED_SOURCES` | all three names | Comma-separated source selection |
+| `SCRAPER_ENABLED_SOURCES` | three boards and four catalogued companies | Comma-separated board and `company:<id>` source selection |
+| `SCRAPER_COMPANY_TARGETS_FILE` | bundled empty catalog | Path to the validated company target JSON catalog |
 | `SCRAPER_CONTACT` | unset | Truthful operator contact appended to user agent |
 | `SCRAPER_REQUESTS_PER_SECOND` | `1` | Process-local request rate |
 | `SCRAPER_MAX_RETRIES` | `3` | Transient retry count |
@@ -133,8 +189,9 @@ Endpoints:
 - `GET /api/v1/ingestion/runs/{run_id}`
 
 The ingestion POST creates a persisted run and returns `202 Accepted`
-immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES` in
-the background. Query the returned run ID to observe its status.
+immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES`,
+including configured company sources, in the background. Query the returned
+run ID to observe its status.
 
 The demand-map endpoint scans all normalized job occurrences and caches their
 title/location data plus local English search terms in the backend for five
@@ -229,8 +286,8 @@ static credential variables and let boto3 use the role.
 
 ## Collection semantics
 
-“All jobs” means all distinct source IDs exposed by an enabled, implemented
-public listing surface during a successful run. It does not include
+"All jobs" means all distinct source IDs exposed by an enabled, implemented
+public listing surface or configured ATS board during a successful run. It does not include
 authenticated, hidden, personalized, expired, or otherwise restricted records.
 Every occurrence also makes one detail request using the same per-source rate
 limit, so a complete run is deliberately slower than summary-only collection.

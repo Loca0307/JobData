@@ -1,0 +1,30 @@
+{
+  "jobs": [
+    {
+      "id": 101,
+      "internal_job_id": 501,
+      "title": "Data Engineer",
+      "updated_at": "2026-07-01T10:00:00Z",
+      "location": {"name": "Zürich, Switzerland"},
+      "absolute_url": "https://boards.greenhouse.io/example/jobs/101",
+      "language": "en",
+      "content": "&lt;p&gt;Build reliable data pipelines.&lt;/p&gt;",
+      "metadata": [{"name": "Team", "value": "Data"}]
+    },
+    {
+      "id": 101,
+      "internal_job_id": 501,
+      "title": "Data Engineer duplicate",
+      "location": {"name": "Zürich, Switzerland"},
+      "absolute_url": "https://boards.greenhouse.io/example/jobs/101"
+    },
+    {
+      "id": 999,
+      "internal_job_id": null,
+      "title": "General application",
+      "location": {"name": "Switzerland"},
+      "absolute_url": "https://boards.greenhouse.io/example/jobs/999"
+    }
+  ],
+  "meta": {"total": 3}
+}

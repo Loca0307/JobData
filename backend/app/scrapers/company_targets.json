@@ -1,0 +1,34 @@
+{
+  "targets": [
+    {
+      "id": "scandit",
+      "company_name": "Scandit",
+      "careers_url": "https://job-boards.greenhouse.io/scandit",
+      "ats": "greenhouse",
+      "board_token": "scandit"
+    },
+    {
+      "id": "on-running",
+      "company_name": "On",
+      "careers_url": "https://job-boards.greenhouse.io/onrunning",
+      "ats": "greenhouse",
+      "board_token": "onrunning"
+    },
+    {
+      "id": "rivr",
+      "company_name": "RIVR",
+      "careers_url": "https://jobs.lever.co/rivr",
+      "ats": "lever",
+      "site": "rivr",
+      "region": "global"
+    },
+    {
+      "id": "swissborg",
+      "company_name": "SwissBorg",
+      "careers_url": "https://jobs.lever.co/swissborg",
+      "ats": "lever",
+      "site": "swissborg",
+      "region": "global"
+    }
+  ]
+}

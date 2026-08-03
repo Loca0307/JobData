@@ -7,6 +7,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       DYNAMODB_TABLE_NAME: ${DYNAMODB_TABLE_NAME}
+      SCRAPER_ENABLED_SOURCES: ${SCRAPER_ENABLED_SOURCES:-jobs.ch,jobup.ch,swissdevjobs.ch,company:scandit,company:on-running,company:rivr,company:swissborg}
       API_CORS_ORIGINS: http://localhost:3000
     ports:
       - "8000:8000"

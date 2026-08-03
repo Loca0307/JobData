@@ -57,7 +57,7 @@ def job_counts(
         IngestionRepository, Depends(get_ingestion_repository)
     ],
 ) -> JobCounts:
-    return repository.get_counts(get_all_source_names())
+    return repository.get_counts(get_all_source_names(get_settings()))
 
 
 @router.get("/analysis/demand-map", response_model=DemandMapResult)
