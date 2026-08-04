@@ -11,6 +11,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 
 from app.core.settings import Settings, get_settings
+from app.core.swiss_territory import SWISS_COUNTRY_CODE
 from app.models.jobs import NormalizedJob, SourceRecord
 from app.scrapers.base import BaseJobScraper, ScrapeError
 from app.scrapers.http import RequestRateLimiter, ScraperHttpClient
@@ -130,6 +131,9 @@ class SwissDevJobsScraper(BaseJobScraper):
                 "company": detail.get("company")
                 or feed_record.normalized_job.company,
                 "location": location or None,
+                # SwissDevJobs' public contract is explicitly Swiss vacancies;
+                # unlike global ATS boards, its detail payload has no country.
+                "country_code": SWISS_COUNTRY_CODE,
                 "employment_type": detail.get("jobType"),
                 "seniority": detail.get("expLevel"),
                 "remote_type": remote_type,

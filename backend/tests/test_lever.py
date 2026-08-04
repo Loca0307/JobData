@@ -62,6 +62,7 @@ def test_lever_normalizes_fields_and_preserves_raw_payload():
     assert records[0].source_name == "company:example-lever"
     assert job.company == "Example Lever AG"
     assert job.location == "Zürich, Remote - Switzerland"
+    assert job.country_code == "CH"
     assert job.description == "Build and operate the platform."
     assert job.requirements == "Python\nAWS"
     assert job.employment_type == "Full-time"
@@ -79,6 +80,21 @@ def test_lever_builds_global_and_eu_urls():
         "https://api.eu.lever.co/v0/postings/example?"
     )
     assert "skip=100" in LeverScraper(target())._page_url(1)
+
+
+def test_lever_preserves_structured_foreign_country_for_ingestion_filter():
+    item = posting("foreign")
+    item.update(
+        {
+            "country": "GB",
+            "categories": {"location": "London"},
+        }
+    )
+
+    record = LeverScraper(target())._normalize(item)
+
+    assert record is not None
+    assert record.normalized_job.country_code == "GB"
 
 
 def test_lever_paginates_and_deduplicates_overlapping_ids():

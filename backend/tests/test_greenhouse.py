@@ -51,6 +51,7 @@ def test_greenhouse_normalizes_deduplicates_and_preserves_raw_payload():
     assert job.title == "Data Engineer"
     assert job.company == "Example Greenhouse AG"
     assert job.location == "Zürich, Switzerland"
+    assert job.country_code == "CH"
     assert job.description == "Build reliable data pipelines."
     assert job.posting_date is None
     assert str(job.apply_url) == (
@@ -67,6 +68,21 @@ def test_greenhouse_accepts_empty_or_prospect_only_boards():
     assert scraper._parse_jobs(
         '{"jobs": [{"id": 1, "internal_job_id": null}]}'
     ) == []
+
+
+def test_greenhouse_leaves_foreign_location_outside_swiss_territory():
+    scraper = GreenhouseScraper(target())
+    record = scraper._normalize(
+        {
+            "id": 202,
+            "title": "Data Engineer",
+            "location": {"name": "London"},
+            "absolute_url": "https://boards.greenhouse.io/example/jobs/202",
+        }
+    )
+
+    assert record is not None
+    assert record.normalized_job.country_code is None
 
 
 @pytest.mark.parametrize(

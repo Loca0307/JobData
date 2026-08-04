@@ -272,3 +272,38 @@
   platforms. ATS schema changes fail the affected source loudly.
 - **Revisit when:** A concrete company shortlist requires another ATS, or
   measured coverage justifies a carefully bounded public HTML fallback.
+
+## 14. Evidence-Based Switzerland-Only Ingestion
+
+- **Choice:** Normalize an optional ISO country code in every adapter and let
+  the shared ingestion service persist only records positively classified as
+  `CH`. Prefer a source's structured country value; for ATS records without
+  one, accept only reviewed Swiss country, canton, or major employment-centre
+  names. Count foreign and unknown records separately as `jobs_filtered`.
+- **Why:** Company ATS boards are global even when the company is Swiss. A
+  central gate prevents one adapter from accidentally storing overseas jobs,
+  and rejecting unknown locations avoids silently treating uncertainty as
+  Swiss territory. A separate count keeps filtered records from inflating the
+  number reported as updated.
+- **Relevant files:** `backend/app/core/swiss_territory.py`,
+  `backend/app/models/jobs.py`, `backend/app/models/runs.py`,
+  `backend/app/services/ingestion.py`, the adapters under
+  `backend/app/scrapers/`, `backend/tests/test_swiss_territory.py`, and
+  `backend/tests/test_ingestion.py`.
+- **Alternatives:**
+  - Trust every configured company board, which is simple but stores global
+    vacancies from Greenhouse and Lever.
+  - Geocode every record during ingestion, which covers more place names but
+    adds latency, network dependence, fuzzy-match errors, and third-party
+    availability to the persistence path.
+  - Accept unknown locations and remove them during analysis, which preserves
+    more data but violates the table's Swiss-only scope and makes every reader
+    repeat the rule.
+- **Constraints and risks:** The fallback place catalog is intentionally
+  conservative, so a Swiss ATS job with no country and an unlisted municipality
+  is filtered. SwissDevJobs does not publish a country field and is trusted
+  according to its Swiss-vacancy source contract. The gate affects new writes
+  and updates; it does not delete foreign occurrences stored by earlier code.
+- **Revisit when:** Measured false negatives justify a reviewed municipality
+  dataset, ATS adapters expose richer structured geography, or a safe cleanup
+  workflow for historical records is defined.

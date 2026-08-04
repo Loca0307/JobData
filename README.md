@@ -1,7 +1,7 @@
 # JobData
 
 Private, data-first ingestion for Swiss job-market experiments. The repository
-contains unfiltered job-board adapters, reusable company ATS adapters, an
+contains broad job-board adapters, reusable company ATS adapters, an
 idempotent DynamoDB pipeline, FastAPI operational endpoints, and a basic
 Next.js count dashboard.
 
@@ -17,7 +17,8 @@ Adapters exist for:
 The two JobCloud adapters enumerate unfiltered listing pages until an empty or
 repeated page and then read each job's public JobPosting JSON-LD. SwissDevJobs
 reads the RSS feed and each public embedded detail record. No title, location,
-skill, or profile filters are applied.
+skill, or profile query is sent to those sources. Before persistence, a shared
+territory gate keeps only jobs positively identified as being in Switzerland.
 
 Each DynamoDB `job_occurrence` stores canonical fields in the
 `normalized_job` map and the complete source evidence in the `raw_payload`
@@ -74,6 +75,14 @@ complete source object and target configuration are retained in `raw_payload`.
 Greenhouse prospect/general-interest posts are excluded. Lever pagination is
 bounded and repeated pages fail loudly. Authenticated, blocked, or unsupported
 career systems remain unsupported rather than being bypassed.
+
+Global ATS boards are filtered during ingestion. Structured country fields take
+precedence; otherwise a reviewed set of Swiss country, canton, and major city
+names supplies conservative evidence. Only records classified as `CH` are
+stored. Foreign and unknown locations are counted as `jobs_filtered` in the
+scrape run and are not counted as updates. This intentionally favors a clean
+Swiss dataset over guessing that an ambiguous remote or unknown location is
+Swiss.
 
 The operator remains responsible for ensuring each enabled source may be
 collected in the intended jurisdiction and use case. The application does not
@@ -191,7 +200,9 @@ Endpoints:
 The ingestion POST creates a persisted run and returns `202 Accepted`
 immediately. The backend executes every source in `SCRAPER_ENABLED_SOURCES`,
 including configured company sources, in the background. Query the returned
-run ID to observe its status.
+run ID to observe its status. Run responses report jobs seen, filtered as
+foreign/unknown, created, and updated. The dashboard labels the filtered count
+as “Outside / unknown.”
 
 The demand-map endpoint scans all normalized job occurrences and caches their
 title/location data plus local English search terms in the backend for five
@@ -287,8 +298,10 @@ static credential variables and let boto3 use the role.
 ## Collection semantics
 
 "All jobs" means all distinct source IDs exposed by an enabled, implemented
-public listing surface or configured ATS board during a successful run. It does not include
-authenticated, hidden, personalized, expired, or otherwise restricted records.
+public listing surface or configured ATS board during a successful run that
+also have positive Swiss-territory evidence. It does not include foreign or
+unknown locations, authenticated, hidden, personalized, expired, or otherwise
+restricted records.
 Every occurrence also makes one detail request using the same per-source rate
 limit, so a complete run is deliberately slower than summary-only collection.
 
@@ -302,3 +315,9 @@ parsing code is intentionally kept small enough to follow as a learning
 pipeline.
 Missing listings are not marked inactive after one run; a source-aware
 multi-run inactivity policy has not been implemented yet.
+
+The Switzerland-only gate applies to future ingestion writes and updates. It
+does not automatically delete foreign occurrences stored by an older version;
+automatic deletion would conflict with the conservative inactivity policy and
+owner-managed table boundary. Historical cleanup must therefore be performed
+as a separate, explicitly reviewed operation.

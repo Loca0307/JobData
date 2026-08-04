@@ -8,6 +8,7 @@ from typing import Any
 from bs4 import BeautifulSoup
 
 from app.core.settings import Settings, get_settings
+from app.core.swiss_territory import country_code_from_evidence
 from app.models.jobs import NormalizedJob, SourceRecord
 from app.scrapers.ats.targets import GreenhouseTarget
 from app.scrapers.base import BaseJobScraper, ScrapeError
@@ -103,6 +104,7 @@ class GreenhouseScraper(BaseJobScraper):
                 title=title,
                 company=self.target.company_name,
                 location=location,
+                country_code=country_code_from_evidence(location),
                 description=description,
                 source_website=self.source_name,
                 source_url=source_url,

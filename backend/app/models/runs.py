@@ -17,6 +17,7 @@ class SourceRunResult(BaseModel):
     source_name: str
     status: RunStatus
     jobs_seen: int = 0
+    jobs_filtered: int = 0
     jobs_created: int = 0
     jobs_updated: int = 0
     started_at: datetime
@@ -31,6 +32,7 @@ class ScrapeRun(BaseModel):
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     jobs_seen: int = 0
+    jobs_filtered: int = 0
     jobs_created: int = 0
     jobs_updated: int = 0
     sources: list[SourceRunResult] = Field(default_factory=list)

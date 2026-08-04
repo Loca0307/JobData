@@ -226,6 +226,10 @@ export function JobOverview() {
                 <dd>{numberFormatter.format(displayedRun.jobs_seen)}</dd>
               </div>
               <div>
+                <dt>Outside / unknown</dt>
+                <dd>{numberFormatter.format(displayedRun.jobs_filtered)}</dd>
+              </div>
+              <div>
                 <dt>New</dt>
                 <dd>{numberFormatter.format(displayedRun.jobs_created)}</dd>
               </div>

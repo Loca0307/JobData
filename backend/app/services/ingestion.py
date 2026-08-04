@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from app.core.swiss_territory import SWISS_COUNTRY_CODE
 from app.db.repositories import IngestionRepository
 from app.models.runs import RunStatus, ScrapeRun, SourceRunResult
 from app.scrapers.base import BaseJobScraper
@@ -70,6 +71,7 @@ def execute_scrape_run(
     results.sort(key=lambda result: result.source_name)
     run.sources = results
     run.jobs_seen = sum(result.jobs_seen for result in results)
+    run.jobs_filtered = sum(result.jobs_filtered for result in results)
     run.jobs_created = sum(result.jobs_created for result in results)
     run.jobs_updated = sum(result.jobs_updated for result in results)
     completed_count = sum(
@@ -93,11 +95,20 @@ def _ingest_source(
 ) -> SourceRunResult:
     started_at = datetime.now(UTC)
     jobs_seen = 0
+    jobs_filtered = 0
+    jobs_persisted = 0
     jobs_created = 0
     try:
         for record in scraper.scrape_all():
             jobs_seen += 1
-            jobs_created += repository.save_record(record, run_id)
+            # Persistence is intentionally conservative: a missing country is
+            # not evidence that a global ATS vacancy belongs to Switzerland.
+            if record.normalized_job.country_code != SWISS_COUNTRY_CODE:
+                jobs_filtered += 1
+                continue
+            created = repository.save_record(record, run_id)
+            jobs_persisted += 1
+            jobs_created += created
         status = RunStatus.COMPLETED
         error_category = None
         error_message = None
@@ -114,8 +125,9 @@ def _ingest_source(
         source_name=scraper.source_name,
         status=status,
         jobs_seen=jobs_seen,
+        jobs_filtered=jobs_filtered,
         jobs_created=jobs_created,
-        jobs_updated=jobs_seen - jobs_created,
+        jobs_updated=jobs_persisted - jobs_created,
         started_at=started_at,
         completed_at=completed_at,
         error_category=error_category,

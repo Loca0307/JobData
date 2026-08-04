@@ -72,6 +72,7 @@ def test_jobs_ch_paginates_enriches_and_preserves_raw_data():
     assert job.title == "Senior Data Engineer"
     assert job.company == "Example AG"
     assert job.location == "Example Street 1, 8000, Zürich, CH"
+    assert job.country_code == "CH"
     assert job.description.startswith("Your role")
     assert job.employment_type == "Permanent position"
     assert job.remote_type == "remote"

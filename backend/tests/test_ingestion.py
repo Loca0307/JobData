@@ -8,10 +8,16 @@ from app.scrapers.base import BaseJobScraper, ScrapeError
 from app.services.ingestion import NoEnabledSourcesError, ingest_all_sources
 
 
-def record(source: str, source_job_id: str) -> SourceRecord:
+def record(
+    source: str,
+    source_job_id: str,
+    *,
+    country_code: str | None = "CH",
+) -> SourceRecord:
     raw = {"id": source_job_id}
     job = NormalizedJob(
         title=f"Job {source_job_id}",
+        country_code=country_code,
         source_website=source,
         source_url=f"https://example.test/{source_job_id}",
         external_id=source_job_id,
@@ -82,6 +88,7 @@ def test_ingestion_isolates_source_failure_and_keeps_partial_records():
 
     assert run.status == RunStatus.PARTIAL
     assert run.jobs_seen == 2
+    assert run.jobs_filtered == 0
     assert run.jobs_created == 2
     assert [result.status for result in run.sources] == [
         RunStatus.COMPLETED,
@@ -101,6 +108,28 @@ def test_reingestion_updates_sightings_without_duplicate_creation():
     assert first.jobs_created == 1
     assert second.jobs_created == 0
     assert second.jobs_updated == 1
+
+
+def test_ingestion_persists_only_jobs_with_swiss_country_evidence():
+    repository = FakeRepository()
+    scraper = FakeScraper(
+        "global.test",
+        [
+            record("global.test", "swiss", country_code="CH"),
+            record("global.test", "foreign", country_code="GB"),
+            record("global.test", "unknown", country_code=None),
+        ],
+    )
+
+    run = ingest_all_sources([scraper], repository)
+
+    assert run.status == RunStatus.COMPLETED
+    assert run.jobs_seen == 3
+    assert run.jobs_filtered == 2
+    assert run.jobs_created == 1
+    assert run.jobs_updated == 0
+    assert repository.known == {("global.test", "swiss")}
+    assert run.sources[0].jobs_filtered == 2
 
 
 def test_no_enabled_sources_stops_before_creating_a_run():
