@@ -10,9 +10,7 @@ import httpx
 
 from app.analysis.demand_map import SwissLocation, resolve_swiss_location
 
-_GEO_ADMIN_SEARCH_URL = (
-    "https://api3.geo.admin.ch/rest/services/api/SearchServer"
-)
+_GEO_ADMIN_SEARCH_URL = "https://api3.geo.admin.ch/rest/services/api/SearchServer"
 _NON_CITY_LOCATIONS = {
     "remote",
     "schweiz",
@@ -21,6 +19,9 @@ _NON_CITY_LOCATIONS = {
     "valais",
     "vaud",
 }
+_COUNTRY_PARTS = {"ch", "schweiz", "suisse", "svizzera", "switzerland"}
+_POSTAL_CODE = re.compile(r"^\d{4}$")
+_POSTAL_CITY = re.compile(r"^(\d{4})\s+(.+)$")
 
 
 @lru_cache(maxsize=2_048)
@@ -30,16 +31,20 @@ def resolve_cached_swiss_location(value: str) -> SwissLocation | None:
     if known_location is not None:
         return known_location
 
-    city = _city_query(value)
-    if city is None:
+    query = _geocoding_query(value)
+    if query is None:
         return None
+    search_text, city = query
     try:
         response = httpx.get(
             _GEO_ADMIN_SEARCH_URL,
             params={
-                "searchText": city,
+                "searchText": search_text,
                 "type": "locations",
-                "origins": "gg25,gazetteer",
+                # Address and municipality indexes understand Swiss postal
+                # addresses. The broader gazetteer produced unsafe fuzzy
+                # matches such as a street resolving to a border marker.
+                "origins": "address,zipcode,gg25",
                 "limit": 1,
             },
             timeout=2,
@@ -82,16 +87,37 @@ def resolve_cached_swiss_locations(
         return dict(zip(unique_values, locations, strict=True))
 
 
-def _city_query(value: str) -> str | None:
-    city = value.split(",", 1)[0].strip()
-    city = re.sub(r"^\d{4}\s+", "", city)
+def _geocoding_query(value: str) -> tuple[str, str] | None:
+    """Return a precise Swiss search query and its city display name."""
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    while parts and parts[-1].casefold() in _COUNTRY_PARTS:
+        parts.pop()
+    if not parts:
+        return None
+
+    search_parts = [parts[0]]
+    city = parts[0]
+    for index, part in enumerate(parts):
+        if _POSTAL_CODE.fullmatch(part) and index + 1 < len(parts):
+            city = parts[index + 1]
+            # Keep a preceding street when present: GeoAdmin can then return
+            # the exact address rather than an arbitrary point in the town.
+            search_parts = parts[: index + 2]
+            break
+        postal_city = _POSTAL_CITY.fullmatch(part)
+        if postal_city:
+            city = postal_city.group(2)
+            search_parts = parts[: index + 1]
+            break
+
+    city = city.strip()
     # Concatenated locations are ambiguous and can produce misleading fuzzy
     # matches, for example "ZürichBendern" resolving to central Zürich.
     if re.search(r"[a-zäöüéèà][A-ZÄÖÜ]", city):
         return None
     if city.casefold() in _NON_CITY_LOCATIONS:
         return None
-    return city or None
+    return (" ".join(search_parts), city) if city else None
 
 
 def _display_name(city: str) -> str:

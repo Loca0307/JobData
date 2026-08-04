@@ -208,14 +208,18 @@ The demand-map endpoint scans all normalized job occurrences and caches their
 title/location data plus local English search terms in the backend for five
 minutes. Each English role search filters the full cached data set. Common
 cities resolve locally; other city coordinates
-use the official Swiss geo.admin.ch location service and are cached in memory.
+use the official Swiss geo.admin.ch address and municipality indexes and are
+cached in memory. Full addresses retain their postal code and municipality in
+the lookup so a street name cannot be fuzzily matched to unrelated map
+infrastructure.
 The response includes explicit unmapped counts. The frontend shows city-level
 map dots after a role is submitted; selecting a dot opens that location's job
 count in the details panel. The expandable list separately assigns every
 mapped city to its containing canton, adds the city counts together, and labels
-each row with the canton's full name. City-level results remain on the map and
-are not separate rows in the canton list. No role is searched automatically on
-first load.
+each row with the canton's full name. A narrow boundary tolerance accounts for
+simplification in the published polygons around Swiss border towns. City-level
+results remain on the map and are not separate rows in the canton list. No role
+is searched automatically on first load.
 
 The canton geometry is provided by the `swiss-maps` package from
 Bundesamt für Statistik (BFS), GEOSTAT data.
@@ -253,10 +257,12 @@ npm run build
 
 The dashboard reads aggregate counts and run status through FastAPI. “Run all
 scrapers” starts every enabled adapter, polls the returned run ID, and refreshes
-the totals when the run finishes. The role-demand map plots recognized Swiss
-cities from the bounded backend cache without downloading all jobs or using an
-external map service. Existing jobs appear after the cache is rebuilt; no
-re-ingestion is required. The frontend never connects to DynamoDB directly.
+the totals when the run finishes. Alongside the three job-board totals, the
+dashboard shows one Company ATS total formed from every configured
+`company:<id>` source counter. The role-demand map plots recognized Swiss cities
+from the bounded backend cache without downloading all jobs or using an external
+map service. Existing jobs appear after the cache is rebuilt; no re-ingestion is
+required. The frontend never connects to DynamoDB directly.
 
 ## Docker Compose
 

@@ -98,13 +98,16 @@
   prevent repeat ingestion and concurrent writes from corrupting dashboard
   totals.
 - **Relevant files:** `backend/app/db/repositories.py`,
-  `backend/tests/test_repository.py`, and `frontend/lib/api.ts`.
+  `backend/tests/test_repository.py`, `frontend/lib/api.ts`, and
+  `frontend/lib/job-counts.ts`.
 - **Alternatives:**
   - Scanning for counts is easier to demonstrate but becomes expensive as data
     grows.
   - Non-transactional counters use less code but can disagree with stored jobs
     after partial failures.
-- **Constraints and risks:** All new jobs contend on one total counter.
+- **Constraints and risks:** All new jobs contend on one total counter. The
+  dashboard derives its ATS total by summing bounded `company:<id>` counters,
+  so adding a catalogued company requires no new aggregate storage key.
 - **Revisit when:** Aggregate volume requires asynchronous analytics.
 
 ## 7. FastAPI Boundary and In-Process Runs
@@ -183,8 +186,9 @@
 
 - **Choice:** Render the published 2026 Swiss Maps canton TopoJSON with D3 Geo
   and TopoJSON Client, resolve common cities from a small server-side list, and
-  resolve other city strings through the official Swiss geo.admin.ch location
-  service with an in-memory LRU cache.
+  resolve other city strings through the official Swiss geo.admin.ch address,
+  postal-code, and municipality indexes with an in-memory LRU cache. Exclude
+  the broad gazetteer index from job-location resolution.
 - **Why:** The normalized records already contain city text. Server-side
   cached resolution places small towns without sending job data to the browser.
   Sharing one geographic projection between the canton geometry and city dots
@@ -209,6 +213,17 @@
   `README.md`. First-time resolution of an uncommon city depends on
   geo.admin.ch availability. Only the normalized location string is sent.
   Unknown towns, broad regions, and remote-only strings remain unmapped.
+- **Geocoding constraint:** Normalized locations may contain a street, postal
+  code, municipality, and country. The resolver keeps that evidence in its
+  query and uses the municipality as the display label. A street-only fuzzy
+  gazetteer lookup was rejected because it can return an unrelated Swiss
+  border marker or infrastructure object even when ingestion correctly
+  identified the job as Swiss.
+- **Geometry constraint:** The canton polygons are simplified. Canton
+  assignment tests the exact coordinate first, then offsets it by at most
+  `0.0025` degrees along one axis to retain valid Swiss border municipalities.
+  Larger nearest-canton fallbacks were rejected because they could assign
+  genuinely foreign points to Switzerland.
 - **Revisit when:** Offline operation is required, geocoder latency becomes
   material, or the map needs detailed geographic interaction.
 

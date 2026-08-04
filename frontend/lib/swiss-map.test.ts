@@ -25,3 +25,18 @@ test("jobsByCanton ignores coordinates outside Switzerland", () => {
     0,
   );
 });
+
+test("jobsByCanton keeps a Swiss town on a simplified national border", () => {
+  const counts = jobsByCanton([
+    {
+      latitude: 46.1937027,
+      longitude: 6.2101703,
+      job_count: 1,
+    }, // Thônex, Geneva
+  ]);
+
+  assert.equal(
+    counts.find((canton) => canton.name === "Geneva")?.jobCount,
+    1,
+  );
+});

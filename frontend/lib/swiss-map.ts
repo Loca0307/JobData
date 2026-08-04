@@ -40,6 +40,18 @@ const projection = geoMercator().fitExtent(
 );
 const path = geoPath(projection);
 
+// The published polygons are simplified enough that a valid Swiss coordinate
+// directly beside the national border can fall just outside their outline.
+// Try tiny offsets only after the exact point misses; this keeps edge towns
+// such as Thônex in their canton without accepting genuinely foreign points.
+const CANTON_EDGE_OFFSETS = [
+  [0, 0],
+  [-0.0025, 0],
+  [0.0025, 0],
+  [0, -0.0025],
+  [0, 0.0025],
+] as const;
+
 export const swissCantonPaths = cantons.features
   .map((canton, index) => ({
     id: index,
@@ -75,9 +87,16 @@ export function jobsByCanton(
   }));
 
   for (const point of points) {
-    const canton = cantons.features.find((feature) =>
-      geoContains(feature, [point.longitude, point.latitude]),
-    );
+    const canton = CANTON_EDGE_OFFSETS
+      .map(([longitudeOffset, latitudeOffset]) =>
+        cantons.features.find((feature) =>
+          geoContains(feature, [
+            point.longitude + longitudeOffset,
+            point.latitude + latitudeOffset,
+          ]),
+        ),
+      )
+      .find((feature) => feature !== undefined);
     const cantonId = Number(canton?.id);
     if (cantonId >= 1 && cantonId <= counts.length) {
       counts[cantonId - 1].jobCount += point.job_count;

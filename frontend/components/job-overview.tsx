@@ -10,6 +10,7 @@ import {
   type ScrapeRun,
 } from "@/lib/api";
 import { DemandMap } from "@/components/demand-map";
+import { countCompanyAtsJobs } from "@/lib/job-counts";
 
 const SOURCE_LABELS: Record<string, string> = {
   "jobs.ch": "jobs.ch",
@@ -115,6 +116,9 @@ export function JobOverview() {
 
   const displayedRun = activeRun ?? counts?.latest_run ?? null;
   const isRunActive = activeRun?.status === "running";
+  const companyAtsJobs = counts
+    ? countCompanyAtsJobs(counts.by_source)
+    : null;
 
   return (
     <main>
@@ -197,6 +201,19 @@ export function JobOverview() {
               </div>
             </article>
           ))}
+          <article className="source-card">
+            <div className="source-mark" aria-hidden="true">
+              A
+            </div>
+            <div>
+              <p>Company ATS</p>
+              <strong>
+                {companyAtsJobs === null
+                  ? "—"
+                  : numberFormatter.format(companyAtsJobs)}
+              </strong>
+            </div>
+          </article>
         </div>
       </section>
 

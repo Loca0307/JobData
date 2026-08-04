@@ -131,9 +131,13 @@
 - The ingestion POST stores a running record, returns `202`, and starts an
   in-process FastAPI background task.
 - `frontend/lib/api.ts` is the typed API client.
-- `frontend/components/job-overview.tsx` displays occurrence counts and run
-  state—including the count excluded as outside/unknown territory—starts a
-  run, polls every two seconds, and refreshes totals when the run finishes.
+- `frontend/components/job-overview.tsx` displays the three board occurrence
+  counts plus one combined company ATS count, and shows run state—including
+  the count excluded as outside/unknown territory. It starts a run, polls every
+  two seconds, and refreshes totals when the run finishes.
+- `frontend/lib/job-counts.ts` combines every `company:<id>` counter returned
+  by the API without coupling the dashboard to the current company catalog;
+  `frontend/lib/job-counts.test.ts` covers aggregation and the empty case.
 - The frontend never receives AWS credentials or accesses DynamoDB directly.
 - `backend/tests/test_api.py` covers the operational API.
 
@@ -159,10 +163,14 @@
   prefixes such as `medic` matching `medical`, and aggregates matches by city.
   Unknown titles retain literal matching against the original source title.
 - `backend/app/analysis/geocoding.py` resolves common cities locally, then uses
-  the official Swiss geo.admin.ch location search for other city strings.
-  Distinct locations for one result are resolved with bounded concurrency, and
-  a bounded in-process LRU cache avoids repeated lookups. Coordinates are
-  accepted only inside a Swiss bounding box.
+  the official Swiss geo.admin.ch address, postal-code, and municipality
+  indexes for other location strings. Comma-separated addresses are queried
+  with their street, postal code, and municipality while only the municipality
+  becomes the map label; broad gazetteer results are excluded to prevent fuzzy
+  matches to border markers or infrastructure. Distinct locations for one
+  result are resolved with bounded concurrency, and a bounded in-process LRU
+  cache avoids repeated lookups. Coordinates are accepted only inside a Swiss
+  bounding box.
 - `frontend/lib/api.ts` retrieves the typed result.
   `frontend/lib/swiss-map.ts` converts the published 2026 Swiss canton
   TopoJSON into SVG paths and projects job coordinates through the same D3
@@ -171,8 +179,11 @@
   map with keyboard-accessible dots and a details panel for the selected city.
   The same canton polygons assign each mapped city to a canton for the
   expandable canton-only list. Its rows contain explicit full canton names and
-  summed counts, never separate city entries. The total uses every title match,
-  including jobs whose location could not be mapped.
+  summed counts, never separate city entries. A small edge tolerance compensates
+  for simplification at the national border so valid Swiss locations such as
+  Thônex remain assigned, while clearly foreign coordinates remain excluded.
+  The total uses every title match, including jobs whose location could not be
+  mapped.
   `frontend/lib/swiss-map.test.ts`
   verifies that separate cities in the same canton are added together and
   that coordinates outside Switzerland are not assigned to a canton;

@@ -190,3 +190,73 @@ def test_unknown_city_is_resolved_once_and_cached(monkeypatch):
     assert first == second
     assert first and first.name == "Prilly"
     assert len(requests) == 1
+
+
+def test_full_swiss_address_uses_postal_city_instead_of_fuzzy_gazetteer(
+    monkeypatch,
+):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "results": [
+                    {
+                        "attrs": {
+                            "label": "Wolleraustrasse 11a <b>8807 Freienbach</b>",
+                            "lat": 47.2033,
+                            "lon": 8.7579,
+                        }
+                    }
+                ]
+            }
+
+    requests = []
+    monkeypatch.setattr(
+        "app.analysis.geocoding.httpx.get",
+        lambda *args, **kwargs: requests.append((args, kwargs)) or Response(),
+    )
+    resolve_cached_swiss_location.cache_clear()
+
+    location = resolve_cached_swiss_location(
+        "Wolleraustrasse 11a, 8807, Freienbach, CH"
+    )
+
+    assert location and location.name == "Freienbach"
+    assert (location.latitude, location.longitude) == (47.2033, 8.7579)
+    assert requests[0][1]["params"] == {
+        "searchText": "Wolleraustrasse 11a 8807 Freienbach",
+        "type": "locations",
+        "origins": "address,zipcode,gg25",
+        "limit": 1,
+    }
+
+
+def test_postal_city_without_street_keeps_the_city_as_the_label(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "results": [
+                    {
+                        "attrs": {
+                            "label": "<b>Prilly (VD)</b>",
+                            "lat": 46.5382,
+                            "lon": 6.6046,
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(
+        "app.analysis.geocoding.httpx.get",
+        lambda *args, **kwargs: Response(),
+    )
+    resolve_cached_swiss_location.cache_clear()
+
+    location = resolve_cached_swiss_location("1008 Prilly")
+
+    assert location and location.name == "Prilly"
