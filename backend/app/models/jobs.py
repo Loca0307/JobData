@@ -14,6 +14,11 @@ class NormalizedJob(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     company: str | None = None
     location: str | None = None
+    country_code: str | None = Field(
+        default=None,
+        pattern=r"^[A-Z]{2}$",
+        description="ISO 3166-1 alpha-2 country code when supported by evidence",
+    )
     description: str | None = None
     requirements: str | None = None
     seniority: str | None = None

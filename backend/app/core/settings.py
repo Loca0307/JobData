@@ -1,7 +1,15 @@
 from functools import lru_cache
+from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ENV_FILE = PROJECT_ROOT / ".env"
+DEFAULT_COMPANY_TARGETS_FILE = (
+    Path(__file__).resolve().parents[1] / "scrapers" / "company_targets.json"
+)
 
 
 class Settings(BaseSettings):
@@ -13,8 +21,15 @@ class Settings(BaseSettings):
         default=None, alias="DYNAMODB_ENDPOINT_URL"
     )
     scraper_enabled_sources: str = Field(
-        default="jobs.ch,jobup.ch,swissdevjobs.ch",
+        default=(
+            "jobs.ch,jobup.ch,swissdevjobs.ch,"
+            "company:scandit,company:on-running,company:rivr,company:swissborg"
+        ),
         alias="SCRAPER_ENABLED_SOURCES",
+    )
+    scraper_company_targets_file: Path = Field(
+        default=DEFAULT_COMPANY_TARGETS_FILE,
+        alias="SCRAPER_COMPANY_TARGETS_FILE",
     )
     scraper_user_agent: str = Field(
         default=(
@@ -49,7 +64,7 @@ class Settings(BaseSettings):
         default="http://localhost:3000", alias="API_CORS_ORIGINS"
     )
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=PROJECT_ENV_FILE, extra="ignore")
 
     @property
     def effective_user_agent(self) -> str:
@@ -93,3 +108,10 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def load_local_environment() -> None:
+    """Expose root .env values to libraries that use normal environment lookup."""
+    # override=False keeps exported variables, IAM/container configuration, and
+    # other production credential sources ahead of local development values.
+    load_dotenv(PROJECT_ENV_FILE, override=False)

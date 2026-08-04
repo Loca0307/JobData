@@ -50,6 +50,7 @@ def test_scrape_reads_feed_then_enriches_each_job():
     assert job.title == "Senior Platform Engineer"
     assert job.company == "Example AG"
     assert job.location == "Example Street 1, 8000, Zürich"
+    assert job.country_code == "CH"
     assert job.employment_type == "Full-Time"
     assert job.seniority == "Senior"
     assert job.remote_type == "hybrid"

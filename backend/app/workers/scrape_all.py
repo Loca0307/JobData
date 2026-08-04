@@ -10,15 +10,25 @@ from app.scrapers.registry import get_configured_scrapers
 from app.services.ingestion import ingest_all_sources
 
 
-def main() -> None:
+def configure_logging() -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter(
+            (
+                "%(asctime)s %(levelname)s %(name)s "
+                "run_id=%(run_id)s source=%(source)s %(message)s"
+            ),
+            defaults={"run_id": "-", "source": "-"},
+        )
+    )
     logging.basicConfig(
         level=logging.INFO,
-        format=(
-            "%(asctime)s %(levelname)s %(name)s "
-            "run_id=%(run_id)s source=%(source)s %(message)s"
-        ),
-        defaults={"run_id": "-", "source": "-"},
+        handlers=[handler],
     )
+
+
+def main() -> None:
+    configure_logging()
     settings = get_settings()
     _, table_name = settings.require_dynamodb()
     repository = DynamoIngestionRepository(

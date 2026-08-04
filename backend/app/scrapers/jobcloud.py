@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from bs4 import BeautifulSoup
 
 from app.core.settings import Settings, get_settings
+from app.core.swiss_territory import country_code_from_evidence
 from app.models.jobs import NormalizedJob, SourceRecord
 from app.scrapers.base import BaseJobScraper, ScrapeError
 from app.scrapers.http import RequestRateLimiter, ScraperHttpClient
@@ -165,6 +166,12 @@ class JobCloudScraper(BaseJobScraper):
                 "company": listing_record.normalized_job.company
                 or _text(organization.get("name")),
                 "location": location or listing_record.normalized_job.location,
+                "country_code": country_code_from_evidence(
+                    location or listing_record.normalized_job.location,
+                    structured_country=_country_value(
+                        address.get("addressCountry")
+                    ),
+                ),
                 "description": description,
                 "employment_type": _text(detail.get("employmentType"))
                 or listing_record.normalized_job.employment_type,
@@ -219,6 +226,13 @@ def _date(value: object) -> datetime | None:
 
 def _dictionary(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _country_value(value: object) -> object | None:
+    """Schema.org permits addressCountry as text or a Country object."""
+    if isinstance(value, dict):
+        return value.get("name")
+    return value
 
 
 def _job_posting(html: str) -> dict[str, Any]:

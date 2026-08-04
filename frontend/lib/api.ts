@@ -2,6 +2,7 @@ export type SourceRun = {
   source_name: string;
   status: "running" | "completed" | "partial" | "failed";
   jobs_seen: number;
+  jobs_filtered: number;
   jobs_created: number;
   jobs_updated: number;
   started_at: string;
@@ -16,6 +17,7 @@ export type ScrapeRun = {
   started_at: string;
   completed_at: string | null;
   jobs_seen: number;
+  jobs_filtered: number;
   jobs_created: number;
   jobs_updated: number;
   sources: SourceRun[];

@@ -12,7 +12,14 @@
     outside scope.
   - Startup table creation is convenient but could mutate production
     infrastructure unexpectedly.
-- **Revisit when:** The owner explicitly changes the infrastructure boundary.
+- **Local development:** `python-dotenv` loads the ignored project-root `.env`
+  with `override=False`. This keeps exported variables and deployed
+  IAM/container configuration higher priority while allowing boto3's standard
+  environment credential provider to see local credentials. Passing
+  credentials directly to `boto3.client()` was rejected because it would
+  bypass the normal provider chain.
+- **Revisit when:** The owner changes the infrastructure boundary or local
+  development moves entirely to AWS profiles or SSO.
 
 ## 2. Teaching-Oriented Source Adapters
 
@@ -235,3 +242,68 @@
   catalog deployment.
 - **Revisit when:** Measured misses justify a larger reviewed catalog or the
   operational value of arbitrary translation outweighs its cost and complexity.
+
+## 13. ATS-First Company Career Collection
+
+- **Choice:** Collect company-published vacancies through reusable public
+  Greenhouse and Lever adapters. Keep company identifiers in a validated JSON
+  catalog and instantiate one scraper with source name `company:<id>` for each
+  enabled target.
+- **Why:** Public ATS JSON is structured and more stable than company-specific
+  HTML selectors. A target catalog lets another company using an implemented
+  ATS be added without changing scraper or orchestration code, while separate
+  scraper instances preserve company-level failure isolation.
+- **Relevant files:** `backend/app/scrapers/company_targets.json`,
+  `backend/app/scrapers/ats/targets.py`,
+  `backend/app/scrapers/ats/greenhouse.py`,
+  `backend/app/scrapers/ats/lever.py`, and
+  `backend/app/scrapers/registry.py`.
+- **Alternatives:**
+  - Generic HTML/JSON-LD extraction reaches some custom sites but needs
+    site-specific discovery and cannot guarantee complete enumeration.
+  - Playwright handles some public JavaScript-only pages but adds substantial
+    runtime and maintenance cost.
+  - One scraper per company duplicates ATS parsing and makes platform changes
+    harder to repair consistently.
+- **Constraints and risks:** Only public Greenhouse and Lever boards are
+  supported. The operator must supply correct ATS identifiers and retain a
+  stable catalog ID. Login-only, blocked, custom, and other ATS sites fail as
+  unsupported; the implementation does not bypass controls or auto-detect
+  platforms. ATS schema changes fail the affected source loudly.
+- **Revisit when:** A concrete company shortlist requires another ATS, or
+  measured coverage justifies a carefully bounded public HTML fallback.
+
+## 14. Evidence-Based Switzerland-Only Ingestion
+
+- **Choice:** Normalize an optional ISO country code in every adapter and let
+  the shared ingestion service persist only records positively classified as
+  `CH`. Prefer a source's structured country value; for ATS records without
+  one, accept only reviewed Swiss country, canton, or major employment-centre
+  names. Count foreign and unknown records separately as `jobs_filtered`.
+- **Why:** Company ATS boards are global even when the company is Swiss. A
+  central gate prevents one adapter from accidentally storing overseas jobs,
+  and rejecting unknown locations avoids silently treating uncertainty as
+  Swiss territory. A separate count keeps filtered records from inflating the
+  number reported as updated.
+- **Relevant files:** `backend/app/core/swiss_territory.py`,
+  `backend/app/models/jobs.py`, `backend/app/models/runs.py`,
+  `backend/app/services/ingestion.py`, the adapters under
+  `backend/app/scrapers/`, `backend/tests/test_swiss_territory.py`, and
+  `backend/tests/test_ingestion.py`.
+- **Alternatives:**
+  - Trust every configured company board, which is simple but stores global
+    vacancies from Greenhouse and Lever.
+  - Geocode every record during ingestion, which covers more place names but
+    adds latency, network dependence, fuzzy-match errors, and third-party
+    availability to the persistence path.
+  - Accept unknown locations and remove them during analysis, which preserves
+    more data but violates the table's Swiss-only scope and makes every reader
+    repeat the rule.
+- **Constraints and risks:** The fallback place catalog is intentionally
+  conservative, so a Swiss ATS job with no country and an unlisted municipality
+  is filtered. SwissDevJobs does not publish a country field and is trusted
+  according to its Swiss-vacancy source contract. The gate affects new writes
+  and updates; it does not delete foreign occurrences stored by earlier code.
+- **Revisit when:** Measured false negatives justify a reviewed municipality
+  dataset, ATS adapters expose richer structured geography, or a safe cleanup
+  workflow for historical records is defined.

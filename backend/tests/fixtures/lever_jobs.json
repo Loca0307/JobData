@@ -1,0 +1,46 @@
+[
+  {
+    "id": "lever-1",
+    "text": "Platform Engineer",
+    "categories": {
+      "location": "Zürich",
+      "allLocations": ["Zürich", "Remote - Switzerland"],
+      "commitment": "Full-time",
+      "team": "Engineering"
+    },
+    "descriptionPlain": "Build and operate the platform.",
+    "lists": [
+      {
+        "text": "Requirements",
+        "content": "<li>Python</li><li>AWS</li>"
+      },
+      {
+        "text": "Benefits",
+        "content": "<li>Learning budget</li>"
+      }
+    ],
+    "hostedUrl": "https://jobs.eu.lever.co/example/lever-1",
+    "applyUrl": "https://jobs.eu.lever.co/example/lever-1/apply",
+    "workplaceType": "hybrid",
+    "salaryRange": {
+      "currency": "CHF",
+      "interval": "year",
+      "min": 120000,
+      "max": 140000
+    },
+    "country": "CH"
+  },
+  {
+    "id": "lever-2",
+    "text": "Product Designer",
+    "categories": {
+      "location": "Lausanne",
+      "commitment": "Part-time"
+    },
+    "description": "<p>Design useful products.</p>",
+    "hostedUrl": "https://jobs.eu.lever.co/example/lever-2",
+    "applyUrl": "https://jobs.eu.lever.co/example/lever-2/apply",
+    "workplaceType": "on-site",
+    "salaryDescriptionPlain": "Competitive salary"
+  }
+]
