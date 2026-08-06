@@ -152,8 +152,10 @@
   that projection, `backend/app/analysis/title_aliases.py` appends reviewed
   English search terms for whole German, French, Italian, or English title
   aliases from `backend/app/analysis/data/job_title_aliases.json`. Stored and
-  displayed source titles are never changed. A successful job write invalidates
-  the cache so the next request sees newly ingested data.
+  displayed source titles are never changed. The cache remains a stable
+  snapshot while a scrape run writes records, then successful run finalization
+  invalidates it so the next request sees the completed ingestion. This avoids
+  repeated full-table scans while ingestion and map requests overlap.
 - `GET /api/v1/analysis/demand-map?role=<role>` in
   `backend/app/api/routes.py` filters the complete cached list for every role
   search; it does not truncate the candidate set.

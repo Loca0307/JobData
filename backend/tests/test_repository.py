@@ -187,6 +187,28 @@ def test_repository_scans_job_locations_once_then_uses_cache():
     assert len(client.scans) == 1
 
 
+def test_repository_keeps_map_snapshot_during_writes_and_invalidates_at_finish():
+    client = RecordingClient(scan_jobs=[make_record().normalized_job])
+    repository = DynamoIngestionRepository(client, "JobData")
+
+    repository.get_cached_job_locations()
+    repository.save_record(make_record(), "run-1")
+    repository.get_cached_job_locations()
+
+    assert len(client.scans) == 1
+
+    repository.finish_run(
+        ScrapeRun(
+            run_id="run-1",
+            status=RunStatus.COMPLETED,
+            completed_at=datetime(2026, 7, 24, tzinfo=UTC),
+        )
+    )
+    repository.get_cached_job_locations()
+
+    assert len(client.scans) == 2
+
+
 def test_repository_expands_existing_multilingual_title_for_search():
     existing_job = make_record().normalized_job.model_copy(
         update={"title": "Softwareentwicklerin"}

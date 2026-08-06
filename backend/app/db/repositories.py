@@ -84,7 +84,6 @@ class DynamoIngestionRepository:
         )
 
     def save_record(self, record: SourceRecord, run_id: str) -> bool:
-        self._job_location_cache_expires_at = 0.0
         now = record.normalized_job.scrape_timestamp.astimezone(UTC).isoformat()
         job_id = stable_job_id(record.source_name, record.source_job_id)
         key = {
@@ -221,6 +220,12 @@ class DynamoIngestionRepository:
                 },
             ]
         )
+        # Keep one stable map snapshot while sources are writing. Invalidating
+        # after every record would make role searches repeatedly scan the
+        # table during ingestion. Waiting for an in-progress scan here also
+        # guarantees that a scan which overlaps completion is not left cached.
+        with self._job_location_cache_lock:
+            self._job_location_cache_expires_at = 0.0
 
     def get_run(self, run_id: str) -> ScrapeRun | None:
         response = self._client.get_item(

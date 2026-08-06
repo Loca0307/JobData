@@ -177,7 +177,11 @@
 - **Constraints and risks:** DynamoDB charges for the full scan once per
   five-minute cache window per backend process. Results may be stale for up to
   five minutes, and the complete projected title/location set consumes backend
-  memory. The cache is invalidated by ingestion writes in the same process.
+  memory. During an active ingestion the map intentionally serves its current
+  snapshot instead of invalidating it for every job write; completing the run
+  invalidates the snapshot once. A first map request during a run can therefore
+  show a partial snapshot until the run completes, but later searches do not
+  trigger competing full-table scans for every newly written job.
 - **Revisit when:** The table or number of backend processes makes scan cost,
   latency, or memory use material. A purpose-built index or search service
   would then be appropriate.

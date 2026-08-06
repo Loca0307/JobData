@@ -209,7 +209,10 @@ title/location data plus local English search terms in the backend for five
 minutes. Each English role search filters the full cached data set. Common
 cities resolve locally; other city coordinates
 use the official Swiss geo.admin.ch address and municipality indexes and are
-cached in memory. Full addresses retain their postal code and municipality in
+cached in memory. While ingestion is active, the map keeps using its current
+snapshot instead of rescanning after every stored job; completing the run
+invalidates that snapshot so the next search loads the finished data. Full
+addresses retain their postal code and municipality in
 the lookup so a street name cannot be fuzzily matched to unrelated map
 infrastructure.
 The response includes explicit unmapped counts. The frontend shows city-level
