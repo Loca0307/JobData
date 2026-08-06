@@ -80,11 +80,28 @@ export function jobsByCanton(
     job_count: number;
   }>,
 ) {
+  return buildSwissMapData(points).cantonCounts;
+}
+
+/**
+ * Keep the plotted cities and canton totals based on the same containment
+ * decision. A geocoder result can be inside Switzerland's broad bounding box
+ * while still being over the border, so it must not appear as an unlisted dot.
+ */
+export function buildSwissMapData<
+  Point extends {
+    latitude: number;
+    longitude: number;
+    job_count: number;
+  },
+>(points: Point[]) {
   const counts = CANTON_NAMES.map((name, index) => ({
     id: index + 1,
     name,
     jobCount: 0,
   }));
+  const verifiedPoints: Point[] = [];
+  let verifiedJobCount = 0;
 
   for (const point of points) {
     const canton = CANTON_EDGE_OFFSETS
@@ -100,12 +117,18 @@ export function jobsByCanton(
     const cantonId = Number(canton?.id);
     if (cantonId >= 1 && cantonId <= counts.length) {
       counts[cantonId - 1].jobCount += point.job_count;
+      verifiedPoints.push(point);
+      verifiedJobCount += point.job_count;
     }
   }
 
-  return counts.sort(
-    (first, second) =>
-      second.jobCount - first.jobCount ||
-      first.name.localeCompare(second.name),
-  );
+  return {
+    cantonCounts: counts.sort(
+      (first, second) =>
+        second.jobCount - first.jobCount ||
+        first.name.localeCompare(second.name),
+    ),
+    points: verifiedPoints,
+    jobCount: verifiedJobCount,
+  };
 }

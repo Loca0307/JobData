@@ -471,10 +471,16 @@ dd {
 
 .map-total > strong {
   display: block;
-  margin: 4px 0 14px;
+  margin: 4px 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 2.5rem;
   font-weight: 500;
+}
+
+.map-coverage {
+  display: block;
+  margin-bottom: 14px;
+  line-height: 1.4;
 }
 
 .canton-breakdown summary {

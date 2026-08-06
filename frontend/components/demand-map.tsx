@@ -8,7 +8,7 @@ import {
   type DemandMapResult,
 } from "@/lib/api";
 import {
-  jobsByCanton,
+  buildSwissMapData,
   projectSwissCoordinates,
   SWISS_MAP_HEIGHT,
   SWISS_MAP_WIDTH,
@@ -73,10 +73,13 @@ export function DemandMap() {
     }
   }
 
-  const cantonCounts = jobsByCanton(result?.points ?? []);
+  const mapData = buildSwissMapData(result?.points ?? []);
+  const jobsWithoutVerifiedCanton = result
+    ? Math.max(0, result.matching_jobs - mapData.jobCount)
+    : 0;
   const largestCount = Math.max(
     1,
-    ...(result?.points.map((point) => point.job_count) ?? []),
+    ...mapData.points.map((point) => point.job_count),
   );
 
   return (
@@ -129,7 +132,7 @@ export function DemandMap() {
                   <path key={canton.id} d={canton.path} />
                 ))}
               </g>
-              {[...(result?.points ?? [])].reverse().map((point) => {
+              {[...mapData.points].reverse().map((point) => {
                 const position = project(point);
                 const radius =
                   7 + Math.sqrt(point.job_count / largestCount) * 19;
@@ -183,7 +186,7 @@ export function DemandMap() {
               <p className="map-message">
                 {isLoading
                   ? "Loading demand…"
-                  : result?.points.length
+                  : mapData.points.length
                     ? "Select a dot to see that location’s details."
                     : role
                       ? "No mapped jobs match this role yet."
@@ -194,10 +197,16 @@ export function DemandMap() {
               <div className="map-total">
                 <span>Total jobs found</span>
                 <strong>{result.matching_jobs}</strong>
+                <small className="map-coverage">
+                  {mapData.jobCount} shown on the map
+                  {jobsWithoutVerifiedCanton > 0
+                    ? `; ${jobsWithoutVerifiedCanton} without a verified canton`
+                    : ""}
+                </small>
                 <details className="canton-breakdown">
                   <summary>Jobs by canton</summary>
                   <ul>
-                    {cantonCounts.map((canton) => (
+                    {mapData.cantonCounts.map((canton) => (
                       <li key={canton.id}>
                         <span>{canton.name}</span>
                         <strong>{canton.jobCount}</strong>

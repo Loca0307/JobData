@@ -222,8 +222,10 @@
 - **Geometry constraint:** The canton polygons are simplified. Canton
   assignment tests the exact coordinate first, then offsets it by at most
   `0.0025` degrees along one axis to retain valid Swiss border municipalities.
-  Larger nearest-canton fallbacks were rejected because they could assign
-  genuinely foreign points to Switzerland.
+  The same assignment pass supplies both the plotted points and the canton
+  totals; rejected points remain in the overall match count and are reported
+  as lacking a verified canton. Larger nearest-canton fallbacks were rejected
+  because they could assign genuinely foreign points to Switzerland.
 - **Revisit when:** Offline operation is required, geocoder latency becomes
   material, or the map needs detailed geographic interaction.
 

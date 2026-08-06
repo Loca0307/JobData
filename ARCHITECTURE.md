@@ -176,12 +176,17 @@
   TopoJSON into SVG paths and projects job coordinates through the same D3
   geographic projection.
   `frontend/components/demand-map.tsx` renders it as a responsive inline SVG
-  map with keyboard-accessible dots and a details panel for the selected city.
+  map with keyboard-accessible dots and a details panel for the selected city;
+  `frontend/app/globals.css` styles the map and its coverage note.
   The same canton polygons assign each mapped city to a canton for the
   expandable canton-only list. Its rows contain explicit full canton names and
   summed counts, never separate city entries. A small edge tolerance compensates
   for simplification at the national border so valid Swiss locations such as
   Thônex remain assigned, while clearly foreign coordinates remain excluded.
+  `frontend/lib/swiss-map.ts` returns the verified points and canton totals from
+  that single containment pass, so an unverified border-area geocode cannot be
+  drawn on the map while being absent from the list. The details panel reports
+  both the complete match count and the subset with a verified canton.
   The total uses every title match, including jobs whose location could not be
   mapped.
   `frontend/lib/swiss-map.test.ts`

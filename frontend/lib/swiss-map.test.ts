@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { jobsByCanton } from "./swiss-map.ts";
+import { buildSwissMapData, jobsByCanton } from "./swiss-map.ts";
 
 test("jobsByCanton combines cities that belong to the same canton", () => {
   const counts = jobsByCanton([
@@ -38,5 +38,39 @@ test("jobsByCanton keeps a Swiss town on a simplified national border", () => {
   assert.equal(
     counts.find((canton) => canton.name === "Geneva")?.jobCount,
     1,
+  );
+});
+
+test("map points and canton totals exclude the same foreign geocode", () => {
+  const mapData = buildSwissMapData([
+    {
+      name: "Delémont",
+      latitude: 47.365,
+      longitude: 7.345,
+      job_count: 2,
+    },
+    {
+      name: "Nearby French result",
+      latitude: 47.42,
+      longitude: 6.85,
+      job_count: 3,
+    },
+  ]);
+
+  assert.deepEqual(
+    mapData.points.map((point) => point.name),
+    ["Delémont"],
+  );
+  assert.equal(mapData.jobCount, 2);
+  assert.equal(
+    mapData.cantonCounts.find((canton) => canton.name === "Jura")?.jobCount,
+    2,
+  );
+  assert.equal(
+    mapData.cantonCounts.reduce(
+      (total, canton) => total + canton.jobCount,
+      0,
+    ),
+    mapData.jobCount,
   );
 });

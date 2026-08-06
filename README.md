@@ -217,9 +217,12 @@ map dots after a role is submitted; selecting a dot opens that location's job
 count in the details panel. The expandable list separately assigns every
 mapped city to its containing canton, adds the city counts together, and labels
 each row with the canton's full name. A narrow boundary tolerance accounts for
-simplification in the published polygons around Swiss border towns. City-level
-results remain on the map and are not separate rows in the canton list. No role
-is searched automatically on first load.
+simplification in the published polygons around Swiss border towns. The dots
+and canton totals use the same verified polygon assignment, so a nearby foreign
+geocode is not drawn as an unlisted dot. The panel reports how many total
+matches have no verified canton. City-level results remain on the map and are
+not separate rows in the canton list. No role is searched automatically on
+first load.
 
 The canton geometry is provided by the `swiss-maps` package from
 Bundesamt für Statistik (BFS), GEOSTAT data.
